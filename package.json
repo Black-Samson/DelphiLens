@@ -18,12 +18,14 @@
     "@gensyn-ai/gensyn-delphi-sdk": "^2.4.0",
     "better-sqlite3": "^13.2.0",
     "cheerio": "^1.2.0",
-    "dotenv": "^18.0.10"
+    "dotenv": "^18.0.10",
+    "nodemailer": "^10.6.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.6",
+    "@types/nodemailer": "^8.0.2",
     "eslint": "^10.15.0",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
