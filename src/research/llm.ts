@@ -51,7 +51,8 @@ function field(prompt: string, name: string): string {
 }
 
 function bodyText(prompt: string): string {
-  return prompt.split("TEXT:\n")[1]?.trim() ?? "";
+  const parts = prompt.split("\nTEXT:\n");
+  return parts.length > 1 ? parts[parts.length - 1].trim() : "";
 }
 
 function count(text: string, words: string[]): number {
