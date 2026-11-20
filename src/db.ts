@@ -67,6 +67,11 @@ CREATE TABLE IF NOT EXISTS feedback (
   created_at  TEXT DEFAULT (datetime('now')),
   last_seen   TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS runtime_settings (
+  key    TEXT PRIMARY KEY,
+  value  TEXT NOT NULL
+);
 `;
 
 /** Open (and create if needed) the DelphiLens database. Use ":memory:" in tests. */
@@ -77,4 +82,16 @@ export function openDb(dbPath: string): DB {
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
   return db;
+}
+
+/** Runtime switches set from the dashboard (they override .env until cleared). */
+export function getRuntimeFlag(db: DB, key: string): boolean | null {
+  const row = db.prepare("SELECT value FROM runtime_settings WHERE key = ?").get(key) as { value: string } | undefined;
+  return row ? row.value === "true" : null;
+}
+
+export function setRuntimeFlag(db: DB, key: string, value: boolean): void {
+  db.prepare(
+    "INSERT INTO runtime_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+  ).run(key, String(value));
 }

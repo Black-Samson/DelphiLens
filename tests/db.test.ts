@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { openDb } from "../src/db";
+import { getRuntimeFlag, openDb, setRuntimeFlag } from "../src/db";
 
 describe("database", () => {
   it("creates every table", () => {
@@ -9,7 +9,7 @@ describe("database", () => {
       .all()
       .map((row) => (row as { name: string }).name)
       .sort();
-    expect(tables).toEqual(["claim_hashes", "feedback", "markets", "stance_locks", "submissions"]);
+    expect(tables).toEqual(["claim_hashes", "feedback", "markets", "runtime_settings", "stance_locks", "submissions"]);
   });
 
   it("rejects a stance that is not YES or NO", () => {
@@ -24,5 +24,13 @@ describe("database", () => {
     db.prepare("INSERT INTO markets (market_id, question) VALUES ('m1', 'Q?')").run();
     db.exec("SELECT 1");
     expect(db.prepare("SELECT COUNT(*) AS c FROM markets").get()).toEqual({ c: 1 });
+  });
+
+  it("stores dashboard runtime flags", () => {
+    const db = openDb(":memory:");
+    expect(getRuntimeFlag(db, "autoSubmit")).toBeNull();
+    setRuntimeFlag(db, "autoSubmit", true);
+    setRuntimeFlag(db, "autoSubmit", false);
+    expect(getRuntimeFlag(db, "autoSubmit")).toBe(false);
   });
 });
