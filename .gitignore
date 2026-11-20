@@ -1,0 +1,22 @@
+# Secrets
+.env
+
+# Node / build
+node_modules/
+dist/
+coverage/
+*.log
+
+# Local data (keep the folders, ignore the contents)
+data/*.db
+data/*.db-*
+data/snapshots/*
+!data/snapshots/.gitkeep
+
+# Generated reports
+reports/*
+!reports/.gitkeep
+
+# OS / editor
+.DS_Store
+.vscode/
