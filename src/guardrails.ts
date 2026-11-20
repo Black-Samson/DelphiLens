@@ -168,3 +168,59 @@ export function discardDraft(db: DB, id: number): void {
     db.prepare("DELETE FROM claim_hashes WHERE submission_id = ?").run(id);
   })();
 }
+
+// -------------------------------------------------------------- qualification
+
+export interface Qualification {
+  judged: number;
+  markets: number;
+  qualified: boolean;
+}
+
+/** Prizes need at least 10 judged submissions across at least 3 markets. */
+export function qualificationProgress(db: DB): Qualification {
+  const row = db
+    .prepare(
+      "SELECT COUNT(*) AS judged, COUNT(DISTINCT market_id) AS markets FROM submissions WHERE status = 'judged'",
+    )
+    .get() as { judged: number; markets: number };
+  return { ...row, qualified: row.judged >= QUALIFY_JUDGED && row.markets >= QUALIFY_MARKETS };
+}
+
+export interface RankableMarket {
+  marketId: string;
+  rewardPot: number;
+  yesOdds: number | null;
+  evidenceCutoff: string | null;
+}
+
+/** Markets priced between 20% and 80% have the most room for evidence to move the forecaster. */
+export function isContested(yesOdds: number | null): boolean {
+  return yesOdds === null || (yesOdds >= 0.2 && yesOdds <= 0.8);
+}
+
+/**
+ * Order markets for mining and drop the ones we cannot use.
+ *
+ * Until we qualify, untouched markets come first so submissions spread across
+ * 3+ markets early. After that, contested markets with the biggest pots win.
+ */
+export function prioritizeMarkets<T extends RankableMarket>(db: DB, markets: T[], now = new Date()): T[] {
+  const { qualified } = qualificationProgress(db);
+  const scored: { key: number[]; market: T }[] = [];
+  for (const market of markets) {
+    const used = countSubmissions(db, market.marketId);
+    if (used >= MAX_SUBMISSIONS_PER_MARKET) continue;
+    if (market.evidenceCutoff && new Date(market.evidenceCutoff) <= now) continue;
+    const contested = isContested(market.yesOdds) ? 0 : 1;
+    const key = qualified
+      ? [contested, -market.rewardPot, used]
+      : [used > 0 ? 1 : 0, contested, used, -market.rewardPot];
+    scored.push({ key, market });
+  }
+  scored.sort((a, b) => {
+    for (let i = 0; i < a.key.length; i++) if (a.key[i] !== b.key[i]) return a.key[i] - b.key[i];
+    return 0;
+  });
+  return scored.map((item) => item.market);
+}
