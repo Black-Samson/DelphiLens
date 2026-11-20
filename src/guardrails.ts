@@ -1,4 +1,5 @@
 import type { DB } from "./db";
+import { hashText, hashUrl } from "./hashing";
 
 export const MAX_SUBMISSIONS_PER_MARKET = 3;
 export const MAX_FILES_PER_SUBMISSION = 3;
@@ -52,4 +53,118 @@ export function countSubmissions(db: DB, marketId: string): number {
     .prepare("SELECT COUNT(*) AS c FROM submissions WHERE market_id = ? AND status != 'discarded'")
     .get(marketId) as { c: number };
   return row.c;
+}
+
+// ----------------------------------------------------------------- duplicates
+
+/** Reasons a set of links or a claim was already used (by any market). */
+export function findDuplicates(db: DB, links: readonly string[], note: string): string[] {
+  const exists = db.prepare("SELECT 1 FROM claim_hashes WHERE hash = ?");
+  const reasons: string[] = [];
+  for (const link of links) {
+    if (exists.get(hashUrl(link))) reasons.push(`Duplicate source URL: ${link}`);
+  }
+  if (note.trim() && exists.get(hashText(note))) reasons.push("Duplicate claim summary");
+  return reasons;
+}
+
+// ----------------------------------------------------------------- full check
+
+export interface DraftInput {
+  marketId: string;
+  stance: string;
+  note: string;
+  links: readonly string[];
+  files?: readonly string[];
+  confidence?: number;
+}
+
+export function checkSubmission(db: DB, input: DraftInput): string[] {
+  const reasons: string[] = [];
+  const stance = input.stance.toUpperCase();
+  if (!isStance(stance)) reasons.push(`Stance must be YES or NO, got "${input.stance}"`);
+
+  const locked = getLockedStance(db, input.marketId);
+  if (locked && isStance(stance) && stance !== locked) {
+    reasons.push(`Market is locked to ${locked}; ${stance} evidence is blocked`);
+  }
+  if (countSubmissions(db, input.marketId) >= MAX_SUBMISSIONS_PER_MARKET) {
+    reasons.push(`Max ${MAX_SUBMISSIONS_PER_MARKET} submissions per market`);
+  }
+  if ((input.files?.length ?? 0) > MAX_FILES_PER_SUBMISSION) {
+    reasons.push(`Max ${MAX_FILES_PER_SUBMISSION} files per submission`);
+  }
+  if (!input.note.trim()) reasons.push("Evidence note cannot be empty");
+  if (input.links.length === 0) reasons.push("At least one dated source link is required");
+  reasons.push(...findDuplicates(db, input.links, input.note));
+  return reasons;
+}
+
+// ------------------------------------------------------------ draft lifecycle
+
+function rememberHashes(db: DB, input: DraftInput, submissionId: number): void {
+  const insert = db.prepare(
+    "INSERT OR IGNORE INTO claim_hashes (hash, kind, market_id, submission_id) VALUES (?, ?, ?, ?)",
+  );
+  for (const link of input.links) insert.run(hashUrl(link), "url", input.marketId, submissionId);
+  insert.run(hashText(input.note), "claim", input.marketId, submissionId);
+}
+
+/** Validate and store a draft. Throws GuardrailError if any rule is broken. */
+export function createDraft(db: DB, input: DraftInput): number {
+  return db.transaction(() => {
+    const reasons = checkSubmission(db, input);
+    if (reasons.length) throw new GuardrailError(reasons);
+    const info = db
+      .prepare(
+        "INSERT INTO submissions (market_id, stance, note, links, files, confidence, status) VALUES (?, ?, ?, ?, ?, ?, 'draft')",
+      )
+      .run(
+        input.marketId,
+        input.stance.toUpperCase(),
+        input.note.trim(),
+        JSON.stringify(input.links),
+        JSON.stringify(input.files ?? []),
+        input.confidence ?? null,
+      );
+    const id = Number(info.lastInsertRowid);
+    rememberHashes(db, input, id);
+    return id;
+  })();
+}
+
+interface SubmissionRow {
+  id: number;
+  market_id: string;
+  stance: Stance;
+  status: string;
+}
+
+function getRow(db: DB, id: number): SubmissionRow {
+  const row = db.prepare("SELECT id, market_id, stance, status FROM submissions WHERE id = ?").get(id) as
+    | SubmissionRow
+    | undefined;
+  if (!row) throw new Error(`No submission with id ${id}`);
+  return row;
+}
+
+/** Record that a draft was sent to Delphi. This permanently locks the market's stance. */
+export function markSubmitted(db: DB, id: number, remoteId: string, status = "queued"): void {
+  const row = getRow(db, id);
+  db.transaction(() => {
+    db.prepare(
+      "UPDATE submissions SET status = ?, remote_id = ?, submitted_at = datetime('now') WHERE id = ?",
+    ).run(status, remoteId, id);
+    lockStance(db, row.market_id, row.stance);
+  })();
+}
+
+/** Reject a draft before it is sent: frees its slot and its link/claim hashes. */
+export function discardDraft(db: DB, id: number): void {
+  const row = getRow(db, id);
+  if (row.status !== "draft") throw new Error("Only drafts that were not sent can be discarded");
+  db.transaction(() => {
+    db.prepare("UPDATE submissions SET status = 'discarded' WHERE id = ?").run(id);
+    db.prepare("DELETE FROM claim_hashes WHERE submission_id = ?").run(id);
+  })();
 }
