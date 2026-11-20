@@ -1,0 +1,152 @@
+import { isStance, type Stance } from "../guardrails";
+import type { MarketInfo } from "../markets/types";
+import { splitSentences, type LLMProvider } from "./llm";
+import type { SearchResult } from "./search";
+
+export const MAX_BRIEF_CHARS = 700;
+const MAX_TEXT_CHARS = 6000;
+
+const VERIFY_SYSTEM =
+  "You are a strict evidence checker for a prediction-market evidence competition. " +
+  "Only public information counts. Reply with one JSON object and nothing else.";
+const BRIEF_SYSTEM =
+  "You write crisp, objective evidence notes for a forecaster. Never invent facts. " +
+  "Reply with one JSON object and nothing else.";
+
+export class LLMOutputError extends Error {}
+export class BriefError extends Error {}
+
+export interface Verification {
+  publiclyAccessible: boolean;
+  verifiable: boolean;
+  shiftsProbability: boolean;
+  stance: Stance | null;
+  confidence: number;
+  reason: string;
+  passed: boolean;
+}
+
+export interface EvidenceBrief {
+  marketId: string;
+  stance: Stance;
+  brief: string;
+  sourceUrl: string;
+  published: string;
+  confidence: number;
+}
+
+export function parseJsonObject(raw: string): Record<string, unknown> {
+  const cleaned = raw.replace(/```(?:json)?/g, "").trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end <= start) throw new LLMOutputError("No JSON object in LLM reply");
+  try {
+    return JSON.parse(cleaned.slice(start, end + 1));
+  } catch (err) {
+    throw new LLMOutputError(`Invalid JSON from LLM: ${(err as Error).message}`);
+  }
+}
+
+const asBool = (v: unknown) => (typeof v === "string" ? ["true", "yes", "1"].includes(v.trim().toLowerCase()) : Boolean(v));
+
+function header(task: string, market: MarketInfo, result: SearchResult): string {
+  return [
+    `TASK: ${task}`,
+    `QUESTION: ${market.question}`,
+    `CURRENT_YES_ODDS: ${market.yesOdds ?? "unknown"}`,
+    `EVIDENCE_CUTOFF: ${market.evidenceCutoff ?? "unknown"}`,
+    `SOURCE_URL: ${result.url}`,
+    `PUBLISHED: ${result.published ?? ""}`,
+  ].join("\n");
+}
+
+export async function verifyEvidence(llm: LLMProvider, market: MarketInfo, result: SearchResult, text: string): Promise<Verification> {
+  const prompt = [
+    header("VERIFY", market, result),
+    "Check three things about the TEXT:",
+    "1. publicly_accessible: readable by anyone, no paywall, no confidential, leaked or private personal data.",
+    "2. verifiable: a specific, dated fact that can be checked in the source (not rumor or opinion).",
+    "3. shifts_probability: new information that should move the probability of the question resolving YES,",
+    "   beyond what the current odds already reflect.",
+    'Reply with JSON keys: publicly_accessible (bool), verifiable (bool), shifts_probability (bool),',
+    'stance ("YES" if it makes YES more likely, "NO" if less likely, or null), confidence (0 to 1), reason (one sentence).',
+    "TEXT:",
+    text.slice(0, MAX_TEXT_CHARS),
+  ].join("\n");
+  const data = parseJsonObject(await llm.complete(VERIFY_SYSTEM, prompt));
+  const rawStance = typeof data.stance === "string" ? data.stance.trim().toUpperCase() : null;
+  const stance = isStance(rawStance) ? rawStance : null;
+  const confidence = Math.max(0, Math.min(1, Number(data.confidence) || 0));
+  const v = {
+    publiclyAccessible: asBool(data.publicly_accessible),
+    verifiable: asBool(data.verifiable),
+    shiftsProbability: asBool(data.shifts_probability),
+    stance,
+    confidence,
+    reason: String(data.reason ?? ""),
+  };
+  return { ...v, passed: v.publiclyAccessible && v.verifiable && v.shiftsProbability && stance !== null };
+}
+
+/** Brief rules: 2 or 3 sentences, short, factual, no first person, no hype. */
+export function validateBrief(brief: string): string[] {
+  const problems: string[] = [];
+  const n = splitSentences(brief).length;
+  if (n < 2 || n > 3) problems.push(`Brief must be 2-3 sentences, got ${n}`);
+  if (brief.length > MAX_BRIEF_CHARS) problems.push(`Brief must be under ${MAX_BRIEF_CHARS} characters`);
+  if (brief.includes("!")) problems.push("No exclamation marks");
+  if (/\b(I (think|believe|feel|expect)|we|our|my)\b/i.test(brief)) problems.push("No first person or opinions");
+  return problems;
+}
+
+export async function writeBrief(
+  llm: LLMProvider,
+  market: MarketInfo,
+  result: SearchResult,
+  text: string,
+  stance: Stance,
+  retries = 1,
+): Promise<string> {
+  let feedback = "";
+  let problems: string[] = [];
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const prompt = [
+      header("BRIEF", market, result),
+      `STANCE: ${stance}`,
+      "Write a 2 to 3 sentence note for the forecaster: state the dated fact, name the source,",
+      "and say how it bears on the question. Objective, specific, no opinions, no first person.",
+      'Reply with JSON: {"brief": "..."}',
+      feedback,
+      "TEXT:",
+      text.slice(0, MAX_TEXT_CHARS),
+    ].join("\n");
+    const brief = String(parseJsonObject(await llm.complete(BRIEF_SYSTEM, prompt)).brief ?? "").trim();
+    problems = validateBrief(brief);
+    if (!problems.length) return brief;
+    feedback = `FIX: ${problems.join("; ")}`;
+  }
+  throw new BriefError(problems.join("; "));
+}
+
+/** Verify one candidate source and, if it passes, write its brief. */
+export async function mineCandidate(
+  llm: LLMProvider,
+  market: MarketInfo,
+  result: SearchResult,
+  text: string,
+): Promise<{ verification: Verification; evidence: EvidenceBrief | null }> {
+  const verification = await verifyEvidence(llm, market, result, text);
+  if (!verification.passed || !verification.stance) return { verification, evidence: null };
+  const brief = await writeBrief(llm, market, result, text, verification.stance);
+  return {
+    verification,
+    evidence: {
+      marketId: market.marketId,
+      stance: verification.stance,
+      brief,
+      sourceUrl: result.url,
+      published: result.published ?? "",
+      confidence: verification.confidence,
+    },
+  };
+}
