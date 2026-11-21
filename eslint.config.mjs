@@ -8,7 +8,15 @@ export default [
   {
     files: ["web/**/*.js"],
     languageOptions: {
-      globals: { window: "readonly", document: "readonly", fetch: "readonly", console: "readonly" },
+      globals: {
+        window: "readonly",
+        document: "readonly",
+        fetch: "readonly",
+        console: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
+      },
     },
   },
 ];
