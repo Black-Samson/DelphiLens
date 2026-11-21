@@ -66,6 +66,13 @@ npm run check
 npm run dashboard
 ```
 
+If `npm install` fails while building `better-sqlite3`, install the compiler tools and try again:
+
+```bash
+sudo apt update && sudo apt install -y build-essential python3
+npm install
+```
+
 Then open **http://localhost:8501** in your browser. Go to *Live markets*, press **Mine now**, review the draft in *Review & receipts*, and press **Approve & submit**. In mock mode, a fake judge returns a verdict after about 5 seconds.
 
 To run the agent on a loop, open a second terminal:
