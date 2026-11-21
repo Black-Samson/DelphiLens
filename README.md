@@ -81,6 +81,16 @@ To run the agent on a loop, open a second terminal:
 npm run worker
 ```
 
+## Troubleshooting
+
+**"Live mode is on ... but .env is missing ..."**: live mode was switched on before the keys were added. Go back to mock mode:
+
+```bash
+npm start -- mock on
+```
+
+Also check that `.env` says `MOCK_MODE=true` until 23 November.
+
 ## Going live on 23 November
 
 See **[docs/GO_LIVE.md](docs/GO_LIVE.md)**. In short: add your Delphi API key, set the evidence base URL and market list from the agent guide, read and accept the evidence terms, and set `MOCK_MODE=false`.
@@ -100,6 +110,7 @@ See **[docs/GO_LIVE.md](docs/GO_LIVE.md)**. In short: add your Delphi API key, s
 | `npm start -- digest [--send]` | Write today's digest, and optionally send it |
 | `npm start -- feedback` | Export `reports/feedback_bounty_notes.md` |
 | `npm start -- terms [--accept <v>]` | Show the evidence terms, or accept a version you have read |
+| `npm start -- mock on` / `mock off` | Switch mock mode (overrides `MOCK_MODE` in `.env`) |
 | `npm run check` | Lint, type-check and run all tests |
 
 The `Makefile` has the same shortcuts (`make dashboard`, `make worker`, `make check`...).
