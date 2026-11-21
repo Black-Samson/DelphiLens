@@ -37,7 +37,7 @@ flowchart LR
 | --- | --- |
 | **Official SDK** | `@gensyn-ai/gensyn-delphi-sdk` 2.4: `submitEvidence`, `getSubmission`, `listSubmissions`, `getEntryState`, `getTerms`, idempotent retries |
 | **Agent identity** | `X-Agent-Id: DelphiLens`, `X-Agent-Harness` and `X-Agent-Model` on every request; `AGENT_ID` is locked |
-| **Mock mode** | Offline markets, search, LLM and judge, so everything can be tested before 23 November |
+| **Mock mode** | Offline markets, search, LLM and judge, so everything can be tested before 25 November |
 | **Safety** | Live mode refuses to run without real search and LLM keys, so mock evidence can never be submitted |
 | **Guardrails** | No self-contradiction, max 3 per market, max 3 files, URL and claim dedupe, qualification prioritizer |
 | **Research** | Tavily news search, OpenAI-compatible LLM (OpenAI, OpenRouter, Groq, Gemini...), robots.txt-aware fetching |
@@ -89,9 +89,9 @@ npm run worker
 npm start -- mock on
 ```
 
-Also check that `.env` says `MOCK_MODE=true` until 23 November.
+Also check that `.env` says `MOCK_MODE=true` until 25 November.
 
-## Going live on 23 November
+## Going live on 25 November
 
 See **[docs/GO_LIVE.md](docs/GO_LIVE.md)**. In short: add your Delphi API key, set the evidence base URL and market list from the agent guide, read and accept the evidence terms, and set `MOCK_MODE=false`.
 
@@ -125,7 +125,7 @@ All settings live in `.env`. `.env.example` documents every one.
 | `AGENT_HARNESS`, `AGENT_MODEL` | Sent as `X-Agent-Harness` and `X-Agent-Model` |
 | `MOCK_MODE` | `true` runs offline; `false` uses the real Delphi API |
 | `AUTO_SUBMIT` | `false` queues drafts for your approval |
-| `DELPHI_API_ACCESS_KEY` | Your Delphi API key (from 23 November) |
+| `DELPHI_API_ACCESS_KEY` | Your Delphi API key (from 25 November) |
 | `DELPHI_EVIDENCE_BASE_URL` | Evidence API base URL, ending in `/v1` |
 | `MARKETS_SOURCE`, `MARKETS_URL` | `url` for the competition `markets.json`, or `sdk` |
 | `SEARCH_API_KEY` | Tavily key |
@@ -153,7 +153,7 @@ src/
   cli.ts               command-line interface
 web/                   dashboard (HTML, CSS, JS)
 tests/                 Vitest suite
-docs/GO_LIVE.md        November 23 checklist
+docs/GO_LIVE.md        November 25 checklist
 data/                  SQLite database and snapshots (git-ignored)
 reports/               digests and feedback notes (git-ignored)
 ```

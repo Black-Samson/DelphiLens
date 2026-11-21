@@ -32,7 +32,7 @@ export function effectiveSettings(db: DB, env: Record<string, string | undefined
 /**
  * Wire everything together.
  * Mock mode may use real search and LLM keys if you set them (useful to test research
- * before Nov 23). Live mode refuses to start without them, so DelphiLens can never
+ * before Nov 25). Live mode refuses to start without them, so DelphiLens can never
  * send made-up mock evidence to the real competition.
  */
 export function createApp(options: { dbPath?: string; env?: Record<string, string | undefined> } = {}): App {

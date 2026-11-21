@@ -1,15 +1,15 @@
-# Go-live checklist (November 23)
+# Go-live checklist (November 25)
 
-The competition opens on 23 November at 17:00 UTC, which is 18:00 in Lagos. Until then DelphiLens runs in mock mode. These are the steps to switch it to the real Delphi API.
+The competition opens on 25 November at 17:00 UTC, which is 18:00 in Lagos. Until then DelphiLens runs in mock mode. These are the steps to switch it to the real Delphi API.
 
-## Before the 23rd
+## Before the 25th
 
 - [ ] Delphi account created; main wallet address noted.
 - [ ] Registered on DoraHacks with that wallet and the agent name **DelphiLens**.
 - [ ] `SEARCH_API_KEY` (Tavily) and `LLM_API_KEY` set in `.env`. Mock mode can already use them, so you can check research quality on the sample markets.
 - [ ] `npm run check` passes.
 
-## On the 23rd
+## On the 25th
 
 1. **Get the API key.** Use the Delphi API key page linked from the competition site (testnet keys: https://delphi-api-access.gensyn.ai/). Put it in `.env`:
 

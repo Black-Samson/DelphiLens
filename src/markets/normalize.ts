@@ -1,7 +1,7 @@
 import type { MarketInfo } from "./types";
 
 /**
- * The competition /markets.json format is published on Nov 23. Until then this
+ * The competition /markets.json format is published on Nov 25. Until then this
  * reads the field names we can reasonably expect and ignores anything else.
  * When the real format is known, adjust the PICK lists below; nothing else changes.
  */
