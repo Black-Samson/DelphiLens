@@ -27,9 +27,12 @@ flowchart LR
 
 1. **Pick markets.** Until you qualify (10 judged submissions across 3 markets), DelphiLens spreads across untouched markets first. After that it favors contested markets (20% to 80%) with the biggest reward pots.
 2. **Mine.** Each question becomes targeted queries for official releases, filings, commits, statistics and local news. Paywalled, stale and post-cutoff results are dropped, and primary sources rank first.
-3. **Verify.** An LLM checks that each fact is public, verifiable and likely to move the forecaster, picks its direction (YES or NO), and writes a 2 to 3 sentence note.
-4. **Guard.** The stance lock, the 3-submission cap, the 3-file cap and the duplicate blocker run locally. Before sending, Delphi's own `getEntryState` and `listSubmissions` are checked too.
-5. **Submit and track.** Drafts are sent with the source links and up to 3 markdown snapshots. Verdicts, rationales and rewards are polled and stored.
+3. **Verify.** An LLM checks that each fact is public, verifiable and likely to move the forecaster, gives its direction (YES or NO), and picks the sentence that states it. That sentence is only kept if it appears word for word in the source.
+4. **Skip repeats.** Delphi counts facts, not links, so each fact is compared with everything already drafted or sent on the market. A reworded or re-sourced repeat is dropped.
+5. **Choose a side.** All passing evidence is weighed before committing. One side must clearly outweigh the other (by 1.5x), otherwise the market is left alone, because the settlement reward only pays when the evidence pointed toward the real outcome.
+6. **Write the note.** One 2 to 3 sentence summary is written from all the chosen sources. The judge only reads what is submitted, so each source's key sentence is quoted underneath it with its publisher, date and link.
+7. **Guard.** The stance lock, the 3-submission cap, the 3-file cap and the duplicate blocker run locally. Before sending, Delphi's own `getEntryState` and `listSubmissions` are checked too.
+8. **Submit and track.** Drafts are sent with the source links and up to 3 markdown snapshots. Verdicts, rationales and rewards are polled and stored.
 
 ## Features
 
@@ -39,7 +42,10 @@ flowchart LR
 | **Agent identity** | `X-Agent-Id: DelphiLens`, `X-Agent-Harness` and `X-Agent-Model` on every request; `AGENT_ID` is locked |
 | **Mock mode** | Offline markets, search, LLM and judge, so everything can be tested before 25 November |
 | **Safety** | Live mode refuses to run without real search and LLM keys, so mock evidence can never be submitted |
-| **Guardrails** | No self-contradiction, max 3 per market, max 3 files, URL and claim dedupe, qualification prioritizer |
+| **Guardrails** | No self-contradiction, max 3 per market, max 3 files, URL and claim dedupe, same-fact check, qualification prioritizer |
+| **Judge-ready notes** | Summary plus word-for-word quotes with publisher, date and link, so the judge sees the evidence even when it cannot open a page |
+| **Stance by weight of evidence** | YES and NO evidence weighed by confidence before a market's side is locked; mixed markets are skipped |
+| **First to new markets** | Checks for new markets every 5 minutes and mines them first |
 | **Research** | Tavily news search, OpenAI-compatible LLM (OpenAI, OpenRouter, Groq, Gemini...), robots.txt-aware fetching |
 | **Dashboard** | Overview, Live markets (Mine Now), Review & receipts, Newsletter & feedback, in the Sack of Chaos palette with dark and light modes |
 | **Digest** | Daily markdown and HTML briefing in `reports/`, optionally sent by Discord webhook or email |
@@ -131,6 +137,8 @@ All settings live in `.env`. `.env.example` documents every one.
 | `SEARCH_API_KEY` | Tavily key |
 | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | Any OpenAI-compatible chat API |
 | `MAX_SOURCE_AGE_DAYS` | Freshness window for sources (default 14) |
+| `WORKER_INTERVAL_MINUTES` | Time between full worker cycles (default 30) |
+| `MARKET_POLL_MINUTES` | How often to check for new markets between cycles (default 5) |
 | `DISCORD_WEBHOOK_URL`, `SMTP_*`, `DIGEST_EMAIL_*` | Optional digest delivery |
 
 ## Project structure
@@ -142,7 +150,7 @@ src/
   guardrails.ts        stance lock, caps, dedupe, qualification, prioritizer
   markets/             mock markets, markets.json normalizer, SDK source, store
   evidence/            SDK EvidenceClient factory and offline mock
-  research/            search, queries, source ranking, fetcher, LLM, verifier, snapshots, miner
+  research/            search, queries, source ranking, fetcher, LLM, verifier, same-fact check, notes, snapshots, miner
   submitter.ts         submit drafts, poll receipts
   stats.ts             earnings and acceptance stats
   newsletter.ts        daily digest (markdown + HTML)
