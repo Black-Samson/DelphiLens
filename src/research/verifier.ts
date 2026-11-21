@@ -23,6 +23,10 @@ export interface Verification {
   stance: Stance | null;
   confidence: number;
   reason: string;
+  /** The fact in one plain sentence, used to spot repeats. */
+  fact: string;
+  /** A sentence copied word for word from the source, or null if the LLM's quote was not found in it. */
+  quote: string | null;
   passed: boolean;
 }
 
@@ -60,6 +64,21 @@ function header(task: string, market: MarketInfo, result: SearchResult): string 
   ].join("\n");
 }
 
+const squash = (t: string) => t.replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/\s+/g, " ").trim();
+
+/**
+ * Keep the LLM's quote only if it really appears in the source text, so a note
+ * never puts invented words in quotation marks. Returns the source's own wording.
+ */
+export function findQuote(text: string, quote: unknown): string | null {
+  if (typeof quote !== "string") return null;
+  const wanted = squash(quote).replace(/^["']|["']$/g, "");
+  if (wanted.length < 12) return null;
+  const haystack = squash(text);
+  const at = haystack.toLowerCase().indexOf(wanted.toLowerCase());
+  return at === -1 ? null : haystack.slice(at, at + wanted.length);
+}
+
 export async function verifyEvidence(llm: LLMProvider, market: MarketInfo, result: SearchResult, text: string): Promise<Verification> {
   const prompt = [
     header("VERIFY", market, result),
@@ -69,7 +88,9 @@ export async function verifyEvidence(llm: LLMProvider, market: MarketInfo, resul
     "3. shifts_probability: new information that should move the probability of the question resolving YES,",
     "   beyond what the current odds already reflect.",
     'Reply with JSON keys: publicly_accessible (bool), verifiable (bool), shifts_probability (bool),',
-    'stance ("YES" if it makes YES more likely, "NO" if less likely, or null), confidence (0 to 1), reason (one sentence).',
+    'stance ("YES" if it makes YES more likely, "NO" if less likely, or null), confidence (0 to 1), reason (one sentence),',
+    "fact (the fact in one plain sentence, with its date), and quote (the single sentence from the TEXT that states",
+    "the fact, copied exactly, word for word).",
     "TEXT:",
     text.slice(0, MAX_TEXT_CHARS),
   ].join("\n");
@@ -84,6 +105,8 @@ export async function verifyEvidence(llm: LLMProvider, market: MarketInfo, resul
     stance,
     confidence,
     reason: String(data.reason ?? ""),
+    fact: String(data.fact ?? "").trim(),
+    quote: findQuote(text, data.quote),
   };
   return { ...v, passed: v.publiclyAccessible && v.verifiable && v.shiftsProbability && stance !== null };
 }

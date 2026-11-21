@@ -72,7 +72,12 @@ export class MockLLM implements LLMProvider {
     const yes = count(text, YES_WORDS);
     const no = count(text, NO_WORDS);
     const stance = yes > no ? "YES" : no > yes ? "NO" : null;
+    const original = bodyText(prompt);
+    const quote =
+      splitSentences(original).find((sentence) => count(sentence.toLowerCase(), [...YES_WORDS, ...NO_WORDS]) > 0) ?? null;
     return {
+      fact: quote ? `${quote.replace(/\.$/, "")} (${field(prompt, "PUBLISHED").slice(0, 10)}).` : "",
+      quote,
       publicly_accessible: !PRIVATE.some((p) => text.includes(p)),
       verifiable: Boolean(field(prompt, "PUBLISHED")) && !UNVERIFIED.some((p) => text.includes(p)),
       shifts_probability: stance !== null,

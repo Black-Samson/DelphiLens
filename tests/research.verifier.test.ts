@@ -3,6 +3,7 @@ import { MockLLM } from "../src/research/llm";
 import type { LLMProvider } from "../src/research/llm";
 import {
   BriefError,
+  findQuote,
   LLMOutputError,
   mineCandidate,
   parseJsonObject,
@@ -46,6 +47,21 @@ describe("verifier", () => {
     expect((await verifyEvidence(llm, market, result, "Subscribe to continue. It was approved.")).passed).toBe(false);
     expect((await verifyEvidence(llm, market, result, "Anonymous sources said it was approved.")).passed).toBe(false);
     expect((await verifyEvidence(llm, market, result, "The committee met on Tuesday.")).passed).toBe(false);
+  });
+
+  it("returns the fact and a quote taken word for word from the source", async () => {
+    const v = await verifyEvidence(new MockLLM(), market, result, GOOD);
+    expect(v.quote).toBe("The Federal Reserve confirmed a rate cut for its December meeting.");
+    expect(GOOD).toContain(v.quote!);
+    expect(v.fact).toContain("2026-11-22");
+  });
+
+  it("drops quotes the source does not contain", () => {
+    expect(findQuote(GOOD, "The Federal Reserve confirmed a rate cut for its December meeting.")).toBeTruthy();
+    expect(findQuote(GOOD, "the federal reserve   confirmed a rate cut")).toBe("The Federal Reserve confirmed a rate cut");
+    expect(findQuote(GOOD, "The Fed announced a surprise hike today.")).toBeNull();
+    expect(findQuote(GOOD, "short")).toBeNull();
+    expect(findQuote(GOOD, 42)).toBeNull();
   });
 
   it("cleans messy LLM output", async () => {
