@@ -47,6 +47,10 @@ describe("dashboard api", () => {
     expect(state.stats.qualification).toBeDefined();
     const flipped = (await api("POST", "/api/settings", { autoSubmit: true })).data;
     expect(flipped.autoSubmit).toBe(true);
+    const refused = await api("POST", "/api/settings", { mockMode: false });
+    expect(refused.status).toBe(400);
+    expect(refused.data.error).toMatch(/Live mode is on/);
+    expect((await api("GET", "/api/state")).data.mockMode).toBe(true);
   });
 
   it("generates the digest and the feedback report", async () => {

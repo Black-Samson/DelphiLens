@@ -61,11 +61,20 @@ export function createHandler(makeApp: () => App) {
     })],
     ["POST", /^\/api\/settings$/, async (_m, req) => {
       const body = await readJson(req);
-      for (const key of ["mockMode", "autoSubmit"]) {
+      const previous = { mockMode: app.settings.mockMode, autoSubmit: app.settings.autoSubmit };
+      for (const key of ["mockMode", "autoSubmit"] as const) {
         if (typeof body[key] === "boolean") setRuntimeFlag(app.db, key, body[key] as boolean);
       }
+      let next: App;
+      try {
+        next = makeApp();
+      } catch (err) {
+        // Refuse the switch (e.g. live mode without keys) instead of leaving a dashboard that cannot start.
+        for (const key of ["mockMode", "autoSubmit"] as const) setRuntimeFlag(app.db, key, previous[key]);
+        throw new HttpError(400, (err as Error).message.split("\n")[0]);
+      }
       const old = app;
-      app = makeApp();
+      app = next;
       old.db.close();
       return { mockMode: app.settings.mockMode, autoSubmit: app.settings.autoSubmit, modes: app.modes };
     }],
@@ -157,7 +166,14 @@ export function startServer(port: number, makeApp: () => App = () => createApp()
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const port = createApp().settings.dashboardPort;
-  startServer(port);
-  console.log(`DelphiLens dashboard: http://localhost:${port}`);
+  try {
+    const probe = createApp();
+    const port = probe.settings.dashboardPort;
+    probe.db.close();
+    startServer(port);
+    console.log(`DelphiLens dashboard: http://localhost:${port}`);
+  } catch (err) {
+    console.error(`\n${(err as Error).message}\n`);
+    process.exitCode = 1;
+  }
 }
