@@ -98,8 +98,11 @@ export async function runCycle(app: App, opts: CycleOptions = {}): Promise<Cycle
   return summary;
 }
 
-/** Run cycles forever, every WORKER_INTERVAL_MINUTES, until Ctrl+C. */
-export async function runWorker(app: App, log: (line: string) => void = console.log): Promise<void> {
+/**
+ * Run cycles forever, every WORKER_INTERVAL_MINUTES, until Ctrl+C.
+ * The app is rebuilt each cycle so dashboard switches (mock mode, auto-submit) take effect.
+ */
+export async function runWorker(makeApp: () => App, log: (line: string) => void = console.log): Promise<void> {
   let stopping = false;
   const stop = () => {
     stopping = true;
@@ -107,12 +110,20 @@ export async function runWorker(app: App, log: (line: string) => void = console.
   };
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
-  const minutes = app.settings.workerIntervalMinutes;
-  log(`DelphiLens worker started (${app.modes.delphi} Delphi, every ${minutes} min, auto-submit ${app.settings.autoSubmit ? "on" : "off"})`);
+  log("DelphiLens worker started. Press Ctrl+C to stop.");
   while (!stopping) {
     const started = Date.now();
-    const s = await runCycle(app, { log: (l) => log(`  ${l}`) });
-    log(`Cycle done: ${s.drafts} drafts, ${s.submitted} submitted, ${s.polled} receipts checked`);
+    let minutes = 30;
+    try {
+      const app = makeApp();
+      minutes = app.settings.workerIntervalMinutes;
+      log(`Cycle (${app.modes.delphi} Delphi, auto-submit ${app.settings.autoSubmit ? "on" : "off"})`);
+      const s = await runCycle(app, { log: (l) => log(`  ${l}`) });
+      log(`Cycle done: ${s.drafts} drafts, ${s.submitted} submitted, ${s.polled} receipts checked`);
+      app.db.close();
+    } catch (err) {
+      log(`Cycle failed: ${(err as Error).message}`);
+    }
     const wait = Math.max(0, minutes * 60_000 - (Date.now() - started));
     for (let waited = 0; waited < wait && !stopping; waited += 1000) await new Promise((r) => setTimeout(r, 1000));
   }
