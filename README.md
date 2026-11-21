@@ -41,7 +41,7 @@ flowchart LR
 | **Safety** | Live mode refuses to run without real search and LLM keys, so mock evidence can never be submitted |
 | **Guardrails** | No self-contradiction, max 3 per market, max 3 files, URL and claim dedupe, qualification prioritizer |
 | **Research** | Tavily news search, OpenAI-compatible LLM (OpenAI, OpenRouter, Groq, Gemini...), robots.txt-aware fetching |
-| **Dashboard** | Overview, Live markets (Mine Now), Review & receipts, Newsletter & feedback, in the Sack of Chaos palette |
+| **Dashboard** | Overview, Live markets (Mine Now), Review & receipts, Newsletter & feedback, in the Sack of Chaos palette with dark and light modes |
 | **Digest** | Daily markdown and HTML briefing in `reports/`, optionally sent by Discord webhook or email |
 | **Feedback log** | API errors, rate limits, ambiguous markets and tool limits, exported for the feedback bounties |
 
