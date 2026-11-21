@@ -30,15 +30,6 @@ export interface Verification {
   passed: boolean;
 }
 
-export interface EvidenceBrief {
-  marketId: string;
-  stance: Stance;
-  brief: string;
-  sourceUrl: string;
-  published: string;
-  confidence: number;
-}
-
 export function parseJsonObject(raw: string): Record<string, unknown> {
   const cleaned = raw.replace(/```(?:json)?/g, "").trim();
   const start = cleaned.indexOf("{");
@@ -122,26 +113,38 @@ export function validateBrief(brief: string): string[] {
   return problems;
 }
 
+export interface BriefSource {
+  result: SearchResult;
+  text: string;
+  fact: string;
+}
+
+/** One 2 to 3 sentence summary written from every chosen source together. */
 export async function writeBrief(
   llm: LLMProvider,
   market: MarketInfo,
-  result: SearchResult,
-  text: string,
+  sources: BriefSource[],
   stance: Stance,
   retries = 1,
 ): Promise<string> {
+  if (!sources.length) throw new BriefError("No sources to summarize");
+  const share = Math.floor(MAX_TEXT_CHARS / sources.length);
+  const body = sources
+    .map((s, i) => `SOURCE ${i + 1}: ${s.result.url} (published ${s.result.published ?? "unknown"})\nFACT: ${s.fact}\n${s.text.slice(0, share)}`)
+    .join("\n\n");
   let feedback = "";
   let problems: string[] = [];
   for (let attempt = 0; attempt <= retries; attempt++) {
     const prompt = [
-      header("BRIEF", market, result),
+      header("BRIEF", market, sources[0].result),
       `STANCE: ${stance}`,
-      "Write a 2 to 3 sentence note for the forecaster: state the dated fact, name the source,",
-      "and say how it bears on the question. Objective, specific, no opinions, no first person.",
+      `Write a 2 to 3 sentence note for the forecaster that combines the ${sources.length} source(s) below:`,
+      "state the dated facts, name who published them, and say how they bear on the question.",
+      "Use only facts from the sources. Objective, specific, no opinions, no first person.",
       'Reply with JSON: {"brief": "..."}',
       feedback,
       "TEXT:",
-      text.slice(0, MAX_TEXT_CHARS),
+      body,
     ].join("\n");
     const brief = String(parseJsonObject(await llm.complete(BRIEF_SYSTEM, prompt)).brief ?? "").trim();
     problems = validateBrief(brief);
@@ -149,27 +152,4 @@ export async function writeBrief(
     feedback = `FIX: ${problems.join("; ")}`;
   }
   throw new BriefError(problems.join("; "));
-}
-
-/** Verify one candidate source and, if it passes, write its brief. */
-export async function mineCandidate(
-  llm: LLMProvider,
-  market: MarketInfo,
-  result: SearchResult,
-  text: string,
-): Promise<{ verification: Verification; evidence: EvidenceBrief | null }> {
-  const verification = await verifyEvidence(llm, market, result, text);
-  if (!verification.passed || !verification.stance) return { verification, evidence: null };
-  const brief = await writeBrief(llm, market, result, text, verification.stance);
-  return {
-    verification,
-    evidence: {
-      marketId: market.marketId,
-      stance: verification.stance,
-      brief,
-      sourceUrl: result.url,
-      published: result.published ?? "",
-      confidence: verification.confidence,
-    },
-  };
 }

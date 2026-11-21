@@ -17,7 +17,8 @@ import { decomposeQuestion } from "./queries";
 import type { SearchProvider, SearchResult } from "./search";
 import { saveSnapshots } from "./snapshots";
 import { isFresh, isPaywalled, rankResults } from "./sources";
-import { BriefError, LLMOutputError, mineCandidate, type EvidenceBrief } from "./verifier";
+import { composeNote } from "./note";
+import { BriefError, LLMOutputError, verifyEvidence, writeBrief, type Verification } from "./verifier";
 
 export interface MinerDeps {
   search: SearchProvider;
@@ -86,7 +87,7 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
   }
 
   let stance = getLockedStance(db, market.marketId);
-  const accepted: { result: SearchResult; text: string; evidence: EvidenceBrief }[] = [];
+  const accepted: { result: SearchResult; text: string; verification: Verification }[] = [];
 
   for (const candidate of await findCandidates(market, deps)) {
     if (accepted.length >= MAX_FILES_PER_SUBMISSION) break;
@@ -105,33 +106,50 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
       continue;
     }
 
-    let mined;
+    let verification: Verification;
     try {
-      mined = await mineCandidate(deps.llm, market, result, page.text);
+      verification = await verifyEvidence(deps.llm, market, result, page.text);
     } catch (err) {
-      if (!(err instanceof LLMOutputError || err instanceof BriefError)) throw err;
+      if (!(err instanceof LLMOutputError)) throw err;
       deps.onIssue?.("llm_error", err.message, { url: candidate.url });
       outcome.log.push(`Verification error: ${candidate.url}`);
       continue;
     }
-    if (!mined.evidence) {
-      outcome.log.push(`Failed checks (${mined.verification.reason}): ${candidate.url}`);
+    if (!verification.passed || !verification.stance) {
+      outcome.log.push(`Failed checks (${verification.reason}): ${candidate.url}`);
       continue;
     }
-    if (stance && mined.evidence.stance !== stance) {
-      outcome.log.push(`Skipped ${mined.evidence.stance} evidence: market locked to ${stance}`);
+    if (stance && verification.stance !== stance) {
+      outcome.log.push(`Skipped ${verification.stance} evidence: market locked to ${stance}`);
       continue;
     }
-    stance = stance ?? mined.evidence.stance;
-    accepted.push({ result, text: page.text, evidence: mined.evidence });
+    stance = stance ?? verification.stance;
+    accepted.push({ result, text: page.text, verification });
   }
 
   if (!accepted.length || !stance) return outcome;
 
-  const note = accepted[0].evidence.brief;
+  let brief: string;
+  try {
+    brief = await writeBrief(
+      deps.llm,
+      market,
+      accepted.map((a) => ({ result: a.result, text: a.text, fact: a.verification.fact })),
+      stance,
+    );
+  } catch (err) {
+    if (!(err instanceof LLMOutputError || err instanceof BriefError)) throw err;
+    deps.onIssue?.("llm_error", err.message, { market: market.marketId });
+    outcome.log.push(`Could not write a note: ${err.message}`);
+    return outcome;
+  }
+  const note = composeNote(
+    brief,
+    accepted.map((a) => ({ url: a.result.url, published: a.result.published, quote: a.verification.quote })),
+  );
   const links = accepted.map((a) => a.result.url);
   const files = saveSnapshots(deps.snapshotsDir, market.marketId, accepted);
-  const confidence = Math.max(...accepted.map((a) => a.evidence.confidence));
+  const confidence = Math.max(...accepted.map((a) => a.verification.confidence));
   try {
     outcome.submissionId = createDraft(db, { marketId: market.marketId, stance, note, links, files, confidence });
   } catch (err) {

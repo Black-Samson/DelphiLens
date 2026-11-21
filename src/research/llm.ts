@@ -88,7 +88,10 @@ export class MockLLM implements LLMProvider {
   }
 
   private brief(prompt: string) {
-    const sentences = splitSentences(bodyText(prompt)).slice(0, 2);
+    // Summarize from the first source's text, skipping the SOURCE and FACT header lines.
+    const firstSource = bodyText(prompt).split(/\n\nSOURCE \d+:/)[0];
+    const text = firstSource.split("\n").filter((l) => !/^(SOURCE \d+|FACT):/.test(l)).join(" ");
+    const sentences = splitSentences(text).slice(0, 2);
     const host = (() => {
       try {
         return new URL(field(prompt, "SOURCE_URL")).hostname.replace(/^www\./, "");

@@ -5,7 +5,6 @@ import {
   BriefError,
   findQuote,
   LLMOutputError,
-  mineCandidate,
   parseJsonObject,
   validateBrief,
   verifyEvidence,
@@ -84,16 +83,35 @@ describe("verifier", () => {
 
   it("retries the brief once with feedback, then gives up", async () => {
     const fixed = new Scripted(['{"brief":"One sentence."}', '{"brief":"First fact. Second fact."}']);
-    expect(await writeBrief(fixed, market, result, GOOD, "YES")).toBe("First fact. Second fact.");
+    expect(await writeBrief(fixed, market, [{ result, text: GOOD, fact: "f" }], "YES")).toBe("First fact. Second fact.");
     expect(fixed.prompts[1]).toContain("FIX:");
     const broken = new Scripted(['{"brief":"Bad."}', '{"brief":"Still bad."}']);
-    await expect(writeBrief(broken, market, result, GOOD, "YES")).rejects.toThrow(BriefError);
+    await expect(writeBrief(broken, market, [{ result, text: GOOD, fact: "f" }], "YES")).rejects.toThrow(BriefError);
   });
 
-  it("builds a brief only for evidence that passes", async () => {
-    const good = await mineCandidate(new MockLLM(), market, result, GOOD);
-    expect(good.evidence).toMatchObject({ stance: "YES", sourceUrl: result.url, marketId: market.marketId });
-    const bad = await mineCandidate(new MockLLM(), market, result, "The committee met.");
-    expect(bad.evidence).toBeNull();
+  it("writes one brief from several sources and labels each one", async () => {
+    const llm = new Scripted(['{"brief":"Combined fact one. Combined fact two."}']);
+    const other = { ...result, url: "https://www.reuters.com/x" };
+    const brief = await writeBrief(
+      llm,
+      market,
+      [
+        { result, text: GOOD, fact: "Fed confirmed cut (2026-11-22)." },
+        { result: other, text: "Reuters reported the confirmation.", fact: "Reuters reported it." },
+      ],
+      "YES",
+    );
+    expect(brief).toBe("Combined fact one. Combined fact two.");
+    expect(llm.prompts[0]).toContain("SOURCE 1: https://www.federalreserve.gov/n");
+    expect(llm.prompts[0]).toContain("SOURCE 2: https://www.reuters.com/x");
+    expect(llm.prompts[0]).toContain("FACT: Reuters reported it.");
+    await expect(writeBrief(llm, market, [], "YES")).rejects.toThrow(BriefError);
+  });
+
+  it("mock brief summarizes the first source without the header lines", async () => {
+    const brief = await writeBrief(new MockLLM(), market, [{ result, text: GOOD, fact: "f" }], "YES");
+    expect(brief.startsWith("The Federal Reserve confirmed")).toBe(true);
+    expect(brief).not.toContain("SOURCE");
+    expect(validateBrief(brief)).toEqual([]);
   });
 });

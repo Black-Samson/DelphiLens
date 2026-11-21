@@ -58,6 +58,8 @@ describe("mineMarket", () => {
     expect(out.links.length).toBeLessThanOrEqual(3);
     expect(out.files.every((f) => fs.existsSync(f))).toBe(true);
     expect(out.links.some((l) => l.includes("localnews"))).toBe(false);
+    expect(out.note).toMatch(/\n\nSources:\n1\. "The agency confirmed the measure/);
+    expect(out.note).toContain(`published 2026-11-22) ${out.links[0]}`);
     expect(countSubmissions(db, market.marketId)).toBe(1);
   });
 
