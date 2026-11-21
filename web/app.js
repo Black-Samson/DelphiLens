@@ -47,7 +47,7 @@ document.querySelectorAll("nav.tabs button").forEach((tab) =>
 function drawChart(points) {
   const svg = $("chart");
   if (!points.length) {
-    svg.innerHTML = `<text x="400" y="115" text-anchor="middle" fill="#a9bdb8" font-size="14">No rewards yet</text>`;
+    svg.innerHTML = `<text x="400" y="115" text-anchor="middle">No rewards yet</text>`;
     return;
   }
   const max = Math.max(...points.map((p) => p.cumulative), 1);
@@ -55,13 +55,13 @@ function drawChart(points) {
   const y = (v) => 195 - (v / max) * 170;
   const line = points.map((p, i) => `${x(i)},${y(p.cumulative)}`).join(" ");
   svg.innerHTML = `
-    <line x1="30" y1="195" x2="770" y2="195" stroke="#1e2d2a"/>
-    <polygon points="${x(0)},195 ${line} ${x(points.length - 1)},195" fill="#d4a85a" opacity="0.12"/>
-    <polyline points="${line}" fill="none" stroke="#d4a85a" stroke-width="2.5"/>
-    ${points.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.cumulative)}" r="3.5" fill="#efe4cc"><title>${p.date}: ${usd(p.cumulative)} USDC.e</title></circle>`).join("")}
-    <text x="30" y="16" fill="#a9bdb8" font-size="12">${usd(max)} USDC.e</text>
-    <text x="30" y="214" fill="#a9bdb8" font-size="12">${points[0].date}</text>
-    <text x="770" y="214" fill="#a9bdb8" font-size="12" text-anchor="end">${points[points.length - 1].date}</text>`;
+    <line class="axis" x1="30" y1="195" x2="770" y2="195"/>
+    <polygon class="area" points="${x(0)},195 ${line} ${x(points.length - 1)},195"/>
+    <polyline class="line" points="${line}"/>
+    ${points.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.cumulative)}" r="3.5" class="dot"><title>${p.date}: ${usd(p.cumulative)} USDC.e</title></circle>`).join("")}
+    <text x="30" y="16">${usd(max)} USDC.e</text>
+    <text x="30" y="214">${points[0].date}</text>
+    <text x="770" y="214" text-anchor="end">${points[points.length - 1].date}</text>`;
 }
 
 async function loadState() {
