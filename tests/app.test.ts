@@ -18,7 +18,9 @@ describe("app wiring", () => {
 
   it("refuses live mode without real research providers", () => {
     const env = { MOCK_MODE: "false", DELPHI_API_ACCESS_KEY: "k", DELPHI_EVIDENCE_BASE_URL: "https://d/v1" };
-    expect(() => createApp({ dbPath: ":memory:", env })).toThrow(/SEARCH_API_KEY and LLM_API_KEY/);
+    expect(() => createApp({ dbPath: ":memory:", env })).toThrow(/missing SEARCH_API_KEY, LLM_API_KEY/);
+    expect(() => createApp({ dbPath: ":memory:", env })).toThrow(/MOCK_MODE=false in \.env/);
+    expect(() => createApp({ dbPath: ":memory:", env: { MOCK_MODE: "false" } })).toThrow(/DELPHI_API_ACCESS_KEY/);
     const live = createApp({ dbPath: ":memory:", env: { ...env, SEARCH_API_KEY: "s", LLM_API_KEY: "l" } });
     expect(live.modes.delphi).toBe("live");
   });

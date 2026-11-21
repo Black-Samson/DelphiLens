@@ -41,10 +41,20 @@ export function createApp(options: { dbPath?: string; env?: Record<string, strin
   const settings = effectiveSettings(db, env);
 
   if (!settings.mockMode) {
-    const missing = [!settings.searchApiKey && "SEARCH_API_KEY", !settings.llmApiKey && "LLM_API_KEY"].filter(Boolean);
+    const missing = [
+      !settings.delphiApiKey && "DELPHI_API_ACCESS_KEY",
+      !settings.evidenceBaseUrl && "DELPHI_EVIDENCE_BASE_URL",
+      !settings.searchApiKey && "SEARCH_API_KEY",
+      !settings.llmApiKey && "LLM_API_KEY",
+    ].filter(Boolean);
     if (missing.length) {
+      const source = getRuntimeFlag(db, "mockMode") === false ? "the Mock mode switch (dashboard or npm start -- mock off)" : "MOCK_MODE=false in .env";
       db.close();
-      throw new Error(`Live mode needs ${missing.join(" and ")} in .env (mock research is never used for real submissions)`);
+      throw new Error(
+        `Live mode is on (set by ${source}) but .env is missing ${missing.join(", ")}.\n` +
+          "Mock research is never used for real submissions, so DelphiLens will not start like this.\n" +
+          "Either add those values to .env, or go back to mock mode with: npm start -- mock on",
+      );
     }
   }
 
