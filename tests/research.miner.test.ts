@@ -79,6 +79,22 @@ describe("mineMarket", () => {
     expect(first.links.filter((l) => second.links.includes(l))).toEqual([]);
   });
 
+  it("skips a fact that was already drafted, even from a different link", async () => {
+    const { db, deps } = setup();
+    const first = await mineMarket(db, market, deps);
+    // Same facts, reworded, under new URLs: the same-fact check must catch them.
+    deps.search = {
+      search: async (q) =>
+        (await new MockSearchProvider(NOW).search(q)).map((r) => ({ ...r, url: r.url.replace("agency.example.gov", "mirror.example.gov") })),
+    };
+    const realFetch = deps.fetcher;
+    deps.fetcher = { fetch: (url) => realFetch.fetch(url.replace("mirror.example.gov", "agency.example.gov")) };
+    const second = await mineMarket(db, market, deps);
+    expect(first.status).toBe("draft_created");
+    expect(second.log.join("\n")).toMatch(/Same fact as submission #1/);
+    expect(second.links.some((l) => l.includes("mirror.example.gov"))).toBe(false);
+  });
+
   it("stops at the per-market cap", async () => {
     const { db, deps } = setup();
     for (const n of [1, 2, 3]) {

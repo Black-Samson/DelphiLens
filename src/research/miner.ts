@@ -18,6 +18,7 @@ import type { SearchProvider, SearchResult } from "./search";
 import { saveSnapshots } from "./snapshots";
 import { isFresh, isPaywalled, rankResults } from "./sources";
 import { composeNote } from "./note";
+import { findRepeat, type PriorNote } from "./samefact";
 import { BriefError, LLMOutputError, verifyEvidence, writeBrief, type Verification } from "./verifier";
 
 /** How much stronger one side's evidence must be before DelphiLens commits to it. */
@@ -116,6 +117,9 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
   }
 
   const locked = getLockedStance(db, market.marketId);
+  const prior = db
+    .prepare("SELECT id, note FROM submissions WHERE market_id = ? AND status != 'discarded' ORDER BY id")
+    .all(market.marketId) as PriorNote[];
   const passing: { result: SearchResult; text: string; verification: Verification }[] = [];
 
   for (const candidate of (await findCandidates(market, deps)).slice(0, MAX_EXAMINED)) {
@@ -146,6 +150,16 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
     if (!verification.passed || !verification.stance) {
       outcome.log.push(`Failed checks (${verification.reason}): ${candidate.url}`);
       continue;
+    }
+    try {
+      const repeat = await findRepeat(deps.llm, verification.fact || verification.quote || "", prior);
+      if (repeat !== null) {
+        outcome.log.push(`Same fact as submission #${repeat}: ${candidate.url}`);
+        continue;
+      }
+    } catch (err) {
+      if (!(err instanceof LLMOutputError)) throw err;
+      deps.onIssue?.("llm_error", `Same-fact check failed: ${err.message}`, { url: candidate.url });
     }
     passing.push({ result, text: page.text, verification });
   }

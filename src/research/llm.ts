@@ -1,3 +1,5 @@
+import { mockSameFact } from "./samefact";
+
 export interface LLMProvider {
   complete(system: string, prompt: string): Promise<string>;
 }
@@ -64,6 +66,7 @@ export class MockLLM implements LLMProvider {
   async complete(_system: string, prompt: string): Promise<string> {
     if (prompt.startsWith("TASK: VERIFY")) return JSON.stringify(this.verify(prompt));
     if (prompt.startsWith("TASK: BRIEF")) return JSON.stringify(this.brief(prompt));
+    if (prompt.startsWith("TASK: SAME_FACT")) return mockSameFact(prompt);
     throw new Error("MockLLM got an unknown task");
   }
 
