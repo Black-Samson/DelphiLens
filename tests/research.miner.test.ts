@@ -7,7 +7,8 @@ import { sampleMarkets } from "../src/markets/mock";
 import { saveMarkets } from "../src/markets/store";
 import { MockFetcher } from "../src/research/fetcher";
 import { MockLLM } from "../src/research/llm";
-import { findCandidates, mineMarket, type MinerDeps } from "../src/research/miner";
+import { decideStance, findCandidates, mineMarket, type MinerDeps } from "../src/research/miner";
+import type { LLMProvider } from "../src/research/llm";
 import { MockSearchProvider } from "../src/research/search";
 import { openDb } from "../src/db";
 
@@ -85,5 +86,53 @@ describe("mineMarket", () => {
     }
     const out = await mineMarket(db, market, deps);
     expect(out.status).toBe("blocked");
+  });
+});
+
+describe("choosing a side from all the evidence", () => {
+  it("needs one side to clearly outweigh the other", () => {
+    expect(decideStance([{ stance: "YES", confidence: 0.8 }]).stance).toBe("YES");
+    expect(decideStance([{ stance: "YES", confidence: 0.6 }, { stance: "NO", confidence: 0.9 }, { stance: "NO", confidence: 0.7 }]).stance).toBe("NO");
+    expect(decideStance([{ stance: "YES", confidence: 0.7 }, { stance: "NO", confidence: 0.6 }]).stance).toBeNull();
+    expect(decideStance([{ stance: null, confidence: 0.2 }]).reason).toBe("No directional evidence");
+  });
+
+  /** A verifier that argues NO for GitHub sources and YES for everything else. */
+  class SplitLLM implements LLMProvider {
+    constructor(private noConfidence: number) {}
+    private mock = new MockLLM();
+    async complete(system: string, prompt: string) {
+      if (!prompt.startsWith("TASK: VERIFY")) return this.mock.complete(system, prompt);
+      const github = /^SOURCE_URL: https:\/\/github\.com/m.test(prompt);
+      return JSON.stringify({
+        publicly_accessible: true,
+        verifiable: true,
+        shifts_probability: true,
+        stance: github ? "NO" : "YES",
+        confidence: github ? this.noConfidence : 0.6,
+        reason: "split",
+        fact: "A dated fact.",
+        quote: null,
+      });
+    }
+  }
+
+  it("does not lock a side when the evidence is mixed", async () => {
+    const { db, deps } = setup();
+    deps.llm = new SplitLLM(3);
+    const out = await mineMarket(db, market, deps);
+    expect(out.status).toBe("no_evidence");
+    expect(out.log.join()).toMatch(/mixed/);
+    expect(countSubmissions(db, market.marketId)).toBe(0);
+  });
+
+  it("keeps only the winning side's sources when one side clearly leads", async () => {
+    const { db, deps } = setup();
+    deps.llm = new SplitLLM(0.1);
+    const out = await mineMarket(db, market, deps);
+    expect(out.status).toBe("draft_created");
+    expect(out.stance).toBe("YES");
+    expect(out.links.some((l) => l.includes("github.com"))).toBe(false);
+    expect(out.log.join()).toMatch(/Skipped NO evidence: leaning YES/);
   });
 });

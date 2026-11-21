@@ -20,6 +20,35 @@ import { isFresh, isPaywalled, rankResults } from "./sources";
 import { composeNote } from "./note";
 import { BriefError, LLMOutputError, verifyEvidence, writeBrief, type Verification } from "./verifier";
 
+/** How much stronger one side's evidence must be before DelphiLens commits to it. */
+export const STANCE_MARGIN = 1.5;
+/** Candidate sources checked per market before deciding. */
+export const MAX_EXAMINED = 8;
+
+export interface StanceDecision {
+  stance: Stance | null;
+  yes: number;
+  no: number;
+  reason: string;
+}
+
+/**
+ * Weigh all passing evidence before choosing a side. The settlement reward only
+ * pays when the evidence pointed toward the real outcome, and a market's side
+ * cannot be changed later, so a lopsided picture is required: one side must
+ * outweigh the other by STANCE_MARGIN (confidence-weighted).
+ */
+export function decideStance(items: { stance: Stance | null; confidence: number }[]): StanceDecision {
+  const weigh = (side: Stance) =>
+    items.filter((i) => i.stance === side).reduce((sum, i) => sum + Math.max(0.05, i.confidence), 0);
+  const yes = Math.round(weigh("YES") * 100) / 100;
+  const no = Math.round(weigh("NO") * 100) / 100;
+  if (!yes && !no) return { stance: null, yes, no, reason: "No directional evidence" };
+  if (yes >= no * STANCE_MARGIN) return { stance: "YES", yes, no, reason: `YES evidence outweighs NO (${yes} vs ${no})` };
+  if (no >= yes * STANCE_MARGIN) return { stance: "NO", yes, no, reason: `NO evidence outweighs YES (${no} vs ${yes})` };
+  return { stance: null, yes, no, reason: `Evidence is mixed (YES ${yes} vs NO ${no}); not taking a side` };
+}
+
 export interface MinerDeps {
   search: SearchProvider;
   llm: LLMProvider;
@@ -86,11 +115,10 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
     return outcome;
   }
 
-  let stance = getLockedStance(db, market.marketId);
-  const accepted: { result: SearchResult; text: string; verification: Verification }[] = [];
+  const locked = getLockedStance(db, market.marketId);
+  const passing: { result: SearchResult; text: string; verification: Verification }[] = [];
 
-  for (const candidate of await findCandidates(market, deps)) {
-    if (accepted.length >= MAX_FILES_PER_SUBMISSION) break;
+  for (const candidate of (await findCandidates(market, deps)).slice(0, MAX_EXAMINED)) {
     if (findDuplicates(db, [candidate.url], "").length) {
       outcome.log.push(`Already used: ${candidate.url}`);
       continue;
@@ -119,14 +147,24 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
       outcome.log.push(`Failed checks (${verification.reason}): ${candidate.url}`);
       continue;
     }
-    if (stance && verification.stance !== stance) {
-      outcome.log.push(`Skipped ${verification.stance} evidence: market locked to ${stance}`);
-      continue;
-    }
-    stance = stance ?? verification.stance;
-    accepted.push({ result, text: page.text, verification });
+    passing.push({ result, text: page.text, verification });
   }
 
+  let stance: Stance | null = locked;
+  if (!locked) {
+    const decision = decideStance(passing.map((p) => p.verification));
+    outcome.log.push(decision.reason);
+    stance = decision.stance;
+  }
+  for (const p of passing) {
+    if (stance && p.verification.stance !== stance) {
+      outcome.log.push(`Skipped ${p.verification.stance} evidence: ${locked ? `market locked to ${stance}` : `leaning ${stance}`}`);
+    }
+  }
+  // Primary sources were ranked first; within the chosen side keep the order, then the most confident.
+  const accepted = passing
+    .filter((p) => stance && p.verification.stance === stance)
+    .slice(0, MAX_FILES_PER_SUBMISSION);
   if (!accepted.length || !stance) return outcome;
 
   let brief: string;
