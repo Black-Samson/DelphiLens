@@ -25,6 +25,21 @@ export interface CycleSummary {
   digest: string | null;
 }
 
+/** Markets first seen within this window, and not yet mined, jump the queue. */
+export const NEW_MARKET_HOURS = 24;
+
+/** Ids of markets seen for the first time recently that have no submissions yet. */
+export function newUnminedMarkets(app: App, now = new Date()): Set<string> {
+  const since = new Date(now.getTime() - NEW_MARKET_HOURS * 3_600_000).toISOString().slice(0, 19).replace("T", " ");
+  const rows = app.db
+    .prepare(
+      `SELECT m.market_id FROM markets m WHERE m.first_seen_at >= ? AND m.status = 'open'
+         AND NOT EXISTS (SELECT 1 FROM submissions s WHERE s.market_id = m.market_id AND s.status != 'discarded')`,
+    )
+    .all(since) as { market_id: string }[];
+  return new Set(rows.map((r) => r.market_id));
+}
+
 /** Markets that already have a draft waiting for review are skipped until it is handled. */
 function hasOpenDraft(app: App, marketId: string): boolean {
   return Boolean(app.db.prepare("SELECT 1 FROM submissions WHERE market_id = ? AND status = 'draft'").get(marketId));
@@ -68,7 +83,12 @@ export async function runCycle(app: App, opts: CycleOptions = {}): Promise<Cycle
     }
     log(`Markets: ${markets.length} open, ${summary.newMarkets} new`);
 
-    const ranked = prioritizeMarkets(app.db, markets, now).filter((m) => !hasOpenDraft(app, m.marketId));
+    // Getting there first matters: brand-new markets go to the front of the queue.
+    const fresh = newUnminedMarkets(app, now);
+    const ranked = prioritizeMarkets(app.db, markets, now)
+      .filter((m) => !hasOpenDraft(app, m.marketId))
+      .sort((a, b) => Number(fresh.has(b.marketId)) - Number(fresh.has(a.marketId)));
+    if (fresh.size) log(`New markets first: ${fresh.size}`);
     for (const market of ranked.slice(0, opts.maxMarkets ?? 3)) {
       const outcome = await mineMarket(app.db, getMarket(app.db, market.marketId) ?? market, minerDeps(app));
       log(`Mined "${market.question}": ${outcome.status}${outcome.stance ? ` (${outcome.stance})` : ""}`);
@@ -114,9 +134,11 @@ export async function runWorker(makeApp: () => App, log: (line: string) => void 
   while (!stopping) {
     const started = Date.now();
     let minutes = 30;
+    let pollMinutes = 5;
     try {
       const app = makeApp();
       minutes = app.settings.workerIntervalMinutes;
+      pollMinutes = app.settings.marketPollMinutes;
       log(`Cycle (${app.modes.delphi} Delphi, auto-submit ${app.settings.autoSubmit ? "on" : "off"})`);
       const s = await runCycle(app, { log: (l) => log(`  ${l}`) });
       log(`Cycle done: ${s.drafts} drafts, ${s.submitted} submitted, ${s.polled} receipts checked`);
@@ -125,6 +147,29 @@ export async function runWorker(makeApp: () => App, log: (line: string) => void 
       log(`Cycle failed: ${(err as Error).message}`);
     }
     const wait = Math.max(0, minutes * 60_000 - (Date.now() - started));
-    for (let waited = 0; waited < wait && !stopping; waited += 1000) await new Promise((r) => setTimeout(r, 1000));
+    let nextPoll = Date.now() + pollMinutes * 60_000;
+    for (let waited = 0; waited < wait && !stopping; waited += 1000) {
+      await new Promise((r) => setTimeout(r, 1000));
+      if (Date.now() < nextPoll) continue;
+      nextPoll = Date.now() + pollMinutes * 60_000;
+      if ((await checkForNewMarkets(makeApp, log)) > 0) break; // start a cycle now
+    }
+  }
+}
+
+/** Light check between cycles. Returns how many markets appeared since the last look. */
+export async function checkForNewMarkets(makeApp: () => App, log: (line: string) => void = () => {}): Promise<number> {
+  try {
+    const app = makeApp();
+    try {
+      const fresh = saveMarkets(app.db, await fetchMarkets(app.settings)).length;
+      if (fresh) log(`${fresh} new market(s) opened: mining now`);
+      return fresh;
+    } finally {
+      app.db.close();
+    }
+  } catch (err) {
+    log(`New-market check failed: ${(err as Error).message}`);
+    return 0;
   }
 }

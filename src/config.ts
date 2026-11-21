@@ -26,6 +26,7 @@ export interface Settings {
   llmModel: string;
   maxSourceAgeDays: number;
   workerIntervalMinutes: number;
+  marketPollMinutes: number;
   dashboardPort: number;
   discordWebhookUrl: string;
   smtp: { host: string; port: number; user: string; password: string; from: string; to: string };
@@ -80,6 +81,7 @@ export function loadSettings(env: Env = process.env): Settings {
     llmModel: env.LLM_MODEL?.trim() || "gpt-4o-mini",
     maxSourceAgeDays: int(env.MAX_SOURCE_AGE_DAYS, 14),
     workerIntervalMinutes: int(env.WORKER_INTERVAL_MINUTES, 30),
+    marketPollMinutes: Math.max(1, int(env.MARKET_POLL_MINUTES, 5)),
     dashboardPort: int(env.DASHBOARD_PORT, 8501),
     discordWebhookUrl: env.DISCORD_WEBHOOK_URL ?? "",
     smtp: {
