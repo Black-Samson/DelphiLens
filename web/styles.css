@@ -120,3 +120,5 @@ td { padding: 12px 8px; border-bottom: 1px solid var(--border); vertical-align: 
 .chart .line { fill: none; stroke: var(--accent); stroke-width: 2.5; }
 .chart .dot { fill: var(--text); }
 .chart text { fill: var(--muted); font: 12px var(--body); }
+
+.theme-btn { padding: 6px 10px; min-width: 64px; }

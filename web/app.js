@@ -34,6 +34,33 @@ async function busy(button, action) {
   }
 }
 
+// ------------------------------------------------------------------ theme
+// Follows the system light/dark setting until you pick one; your pick is remembered.
+const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+
+function currentTheme() {
+  return document.documentElement.dataset.theme || (systemDark.matches ? "dark" : "light");
+}
+
+function showThemeButton() {
+  const next = currentTheme() === "dark" ? "Light" : "Dark";
+  $("theme-toggle").textContent = next;
+  $("theme-toggle").setAttribute("aria-label", `Switch to ${next.toLowerCase()} mode`);
+}
+
+$("theme-toggle").addEventListener("click", () => {
+  const next = currentTheme() === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try {
+    window.localStorage.setItem("delphilens-theme", next);
+  } catch {
+    /* storage unavailable: the choice lasts for this visit only */
+  }
+  showThemeButton();
+});
+systemDark.addEventListener("change", showThemeButton);
+showThemeButton();
+
 // ------------------------------------------------------------------ tabs
 document.querySelectorAll("nav.tabs button").forEach((tab) =>
   tab.addEventListener("click", () => {
