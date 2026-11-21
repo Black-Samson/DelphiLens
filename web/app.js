@@ -142,6 +142,95 @@ $("refresh-markets").addEventListener("click", (e) =>
   }),
 );
 
-const loaders = { overview: loadState, markets: loadMarkets };
+// ------------------------------------------------------- review & receipts
+function submissionCard(s, withActions) {
+  const links = s.links.map((l) => `<li><a href="${esc(l)}" target="_blank" rel="noopener">${esc(l)}</a></li>`).join("");
+  const files = s.files.map((f) => `<a href="/snapshots/${encodeURIComponent(f)}">${esc(f)}</a>`).join(" · ");
+  const verdict = s.verdict || s.status;
+  return `<div class="card">
+    <div class="label">#${s.id} · ${esc(s.question || s.market_id)}</div>
+    <p style="margin:10px 0 0"><span class="pill ${esc(s.stance)}">${esc(s.stance)}</span>
+      ${withActions ? "" : `<span class="pill ${esc(verdict)}">${esc(verdict)}</span> <span class="muted">${usd(s.usdc)} USDC.e${s.bounty_state ? ` · ${esc(s.bounty_state)}` : ""}${s.zero_pay_reason ? ` · ${esc(s.zero_pay_reason)}` : ""}</span>`}</p>
+    <p>${esc(s.note)}</p>
+    <ul class="links">${links}</ul>
+    ${files ? `<p class="muted" style="font-size:12px">Snapshots: ${files}</p>` : ""}
+    ${s.reason ? `<div class="panel" style="margin-top:12px"><div class="label">Judge rationale</div><p style="margin:8px 0 0">${esc(s.reason)}</p></div>` : ""}
+    ${withActions ? `<div class="actions"><button data-approve="${s.id}">Approve &amp; submit</button><button class="danger" data-discard="${s.id}">Reject draft</button></div>` : ""}
+  </div>`;
+}
+
+async function loadReview() {
+  const all = await api("GET", "/api/submissions");
+  const drafts = all.filter((s) => s.status === "draft");
+  const sent = all.filter((s) => !["draft", "discarded"].includes(s.status));
+  $("drafts").innerHTML = drafts.map((s) => submissionCard(s, true)).join("") || `<p class="muted">No drafts waiting.</p>`;
+  $("receipts").innerHTML = sent.map((s) => submissionCard(s, false)).join("") || `<p class="muted">Nothing submitted yet.</p>`;
+}
+
+$("drafts").addEventListener("click", (e) => {
+  const approve = e.target.closest("button[data-approve]");
+  const discard = e.target.closest("button[data-discard]");
+  const button = approve || discard;
+  if (!button) return;
+  busy(button, async () => {
+    if (approve) {
+      const r = await api("POST", `/api/submissions/${approve.dataset.approve}/approve`);
+      toast(`Submitted to Delphi (${r.status}). The verdict usually arrives within minutes.`);
+    } else {
+      await api("POST", `/api/submissions/${discard.dataset.discard}/discard`);
+      toast("Draft rejected. Its sources are free to use again.");
+    }
+    loadReview();
+    loadState();
+  });
+});
+$("poll").addEventListener("click", (e) =>
+  busy(e.target, async () => {
+    const r = await api("POST", "/api/poll");
+    toast(`Checked ${r.checked} submissions`);
+    loadReview();
+    loadState();
+  }),
+);
+
+// --------------------------------------------------- newsletter & feedback
+async function loadNewsletter() {
+  const digest = await api("GET", "/api/digest");
+  $("digest").textContent = digest ? digest.markdown : "No digest yet. Press Generate digest.";
+  const feedback = await api("GET", "/api/feedback");
+  $("feedback").innerHTML =
+    feedback
+      .map((f) => `<tr><td><span class="pill">${esc(f.kind)}</span></td><td>${esc(f.detail)}</td><td>${f.count}×</td></tr>`)
+      .join("") || `<tr><td colspan="3" class="muted">No issues logged.</td></tr>`;
+}
+
+$("digest-generate").addEventListener("click", (e) =>
+  busy(e.target, async () => {
+    const d = await api("POST", "/api/digest");
+    $("digest").textContent = d.markdown;
+    toast(`Saved reports/${d.file}`);
+  }),
+);
+$("digest-send").addEventListener("click", (e) =>
+  busy(e.target, async () => {
+    const r = await api("POST", "/api/digest/send");
+    toast(`Discord: ${r.discord} · Email: ${r.email}`, r.discord.startsWith("failed") || r.email.startsWith("failed"));
+  }),
+);
+$("feedback-export").addEventListener("click", (e) =>
+  busy(e.target, async () => {
+    const r = await api("POST", "/api/feedback/export");
+    toast(`Saved reports/${r.file}`);
+  }),
+);
+$("fb-add").addEventListener("click", (e) =>
+  busy(e.target, async () => {
+    await api("POST", "/api/feedback", { kind: $("fb-kind").value, detail: $("fb-detail").value });
+    $("fb-detail").value = "";
+    loadNewsletter();
+  }),
+);
+
+const loaders = { overview: loadState, markets: loadMarkets, review: loadReview, newsletter: loadNewsletter };
 loadState().catch((err) => toast(err.message, true));
 setInterval(() => loadState().catch(() => {}), 30_000);
