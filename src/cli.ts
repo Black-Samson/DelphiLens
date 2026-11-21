@@ -2,6 +2,8 @@ import { createApp, minerDeps } from "./app";
 import { deliverDigest } from "./delivery";
 import { exportFeedbackReport } from "./feedback";
 import { discardDraft } from "./guardrails";
+import { loadSettings } from "./config";
+import { openDb, setRuntimeFlag } from "./db";
 import { fetchMarkets } from "./markets/source";
 import { getMarket, listMarkets, saveMarkets } from "./markets/store";
 import { buildDigest, renderHtml, renderMarkdown, saveDigest } from "./newsletter";
@@ -24,12 +26,31 @@ const HELP = `DelphiLens commands (run with: npm start -- <command>)
   digest [--send]        Write today's digest (and send it if --send)
   feedback               Export reports/feedback_bounty_notes.md
   terms [--accept <v>]   Show Delphi's evidence terms, or accept a version you have read
+  mock on|off            Switch mock mode (overrides MOCK_MODE in .env)
 `;
 
 async function main(argv: string[]): Promise<void> {
   const [command = "help", ...args] = argv;
   if (command === "help" || command === "--help") return void console.log(HELP);
   if (command === "worker") return runWorker(() => createApp());
+  if (command === "mock") {
+    // Works even when live mode cannot start, so you can always get back to mock mode.
+    if (args[0] !== "on" && args[0] !== "off") throw new Error("Use: npm start -- mock on   (or: mock off)");
+    const db = openDb(loadSettings().dbPath);
+    setRuntimeFlag(db, "mockMode", args[0] === "on");
+    if (args[0] === "off") {
+      try {
+        createApp().db.close();
+      } catch (err) {
+        setRuntimeFlag(db, "mockMode", true);
+        db.close();
+        throw new Error(`${(err as Error).message.split("\n")[0]}\nMock mode stays on.`, { cause: err });
+      }
+    }
+    db.close();
+    console.log(`Mock mode ${args[0]}.`);
+    return;
+  }
 
   const app = createApp();
   try {
