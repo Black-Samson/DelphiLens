@@ -41,7 +41,7 @@ export function getSubmissionRow(db: DB, id: number): SubmissionRow {
 function toFiles(paths: string[]): File[] {
   return paths
     .filter((p) => fs.existsSync(p))
-    .map((p) => new File([fs.readFileSync(p)], path.basename(p), { type: "text/markdown" }));
+    .map((p) => new File([fs.readFileSync(p)], path.basename(p), { type: "text/plain" }));
 }
 
 /** Store what Delphi reports about a submission: status, verdict, rationale and reward. */
