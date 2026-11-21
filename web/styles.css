@@ -51,7 +51,7 @@ h1 { font: 700 clamp(40px, 6vw, 68px)/0.92 var(--display); text-transform: upper
 h1 em { font-style: normal; color: var(--tan); }
 h2 { font: 600 20px/1.2 var(--display); text-transform: uppercase; letter-spacing: 0.04em; color: var(--tan); margin: 30px 0 12px; }
 nav.tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--border); margin-bottom: 24px; overflow-x: auto; }
-nav.tabs button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); padding: 12px 0; }
+nav.tabs button { white-space: nowrap; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); padding: 12px 0; }
 nav.tabs button.active { color: var(--cream); border-bottom-color: var(--gold); }
 .panel { background: var(--panel); border: 1px solid var(--border); padding: 18px; }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0; border: 1px solid var(--border); }
