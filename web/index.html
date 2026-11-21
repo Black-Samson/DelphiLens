@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DelphiLens Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="logo">Delphi<span>/</span>Lens</div>
+
+    <div>
+      <div class="label">Status</div>
+      <p><span id="status-dot" class="status-dot"></span><span id="status-text">Connecting...</span></p>
+      <div id="modes" class="modes"></div>
+    </div>
+
+    <div>
+      <div class="label">Controls</div>
+      <label class="toggle">Mock mode <input type="checkbox" id="toggle-mock"></label>
+      <label class="toggle">Auto-submit <input type="checkbox" id="toggle-auto"></label>
+      <p class="muted" style="font-size:12px">Auto-submit off means every draft waits for your approval in Review.</p>
+    </div>
+
+    <div>
+      <div class="label">Qualification</div>
+      <p style="margin:10px 0 0"><span id="q-judged">0</span>/10 judged submissions</p>
+      <div class="bar"><div id="bar-judged" style="width:0"></div></div>
+      <p style="margin:0"><span id="q-markets">0</span>/3 markets</p>
+      <div class="bar"><div id="bar-markets" style="width:0"></div></div>
+      <p id="q-done" class="muted" hidden>Qualified for prizes.</p>
+    </div>
+  </aside>
+
+  <main>
+    <div class="label">Delphi Agent Arena / Evidence Mining</div>
+    <h1>Command <em>Center</em></h1>
+
+    <nav class="tabs">
+      <button data-tab="overview" class="active">Overview</button>
+      <button data-tab="markets">Live markets</button>
+      <button data-tab="review">Review &amp; receipts</button>
+      <button data-tab="newsletter">Newsletter &amp; feedback</button>
+    </nav>
+
+    <section id="tab-overview">
+      <div class="kpis">
+        <div class="kpi"><div class="label">Total USDC.e</div><div class="value" id="k-usdc">0.00</div></div>
+        <div class="kpi"><div class="label">Judged</div><div class="value" id="k-judged">0</div></div>
+        <div class="kpi"><div class="label">Acceptance</div><div class="value" id="k-rate">0%</div></div>
+        <div class="kpi"><div class="label">Active markets</div><div class="value" id="k-markets">0</div></div>
+      </div>
+      <h2>Cumulative earnings</h2>
+      <div class="panel"><svg id="chart" class="chart" viewBox="0 0 800 220" preserveAspectRatio="none" role="img" aria-label="Cumulative USDC.e earned"></svg></div>
+      <h2>Recent verdicts</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Verdict</th><th>Market</th><th>Stance</th><th>USDC.e</th><th>Rationale</th></tr></thead>
+        <tbody id="recent"></tbody>
+      </table></div>
+    </section>
+
+    <section id="tab-markets" hidden>
+      <p><button id="refresh-markets" class="ghost">Refresh markets</button></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Market</th><th>YES odds</th><th>Pot</th><th>Evidence cutoff</th><th>Stance</th><th>Used</th><th></th></tr></thead>
+        <tbody id="markets"></tbody>
+      </table></div>
+    </section>
+
+    <section id="tab-review" hidden>
+      <h2>Drafts waiting for approval</h2>
+      <div id="drafts"></div>
+      <h2>Receipts</h2>
+      <p><button id="poll" class="ghost">Check verdicts now</button></p>
+      <div id="receipts"></div>
+    </section>
+
+    <section id="tab-newsletter" hidden>
+      <div class="grid-2">
+        <div>
+          <h2>Latest digest</h2>
+          <p><button id="digest-generate">Generate digest</button> <button id="digest-send" class="ghost">Send test update</button></p>
+          <div id="digest" class="digest">No digest yet.</div>
+        </div>
+        <div>
+          <h2>Feedback bounty log</h2>
+          <p><button id="feedback-export" class="ghost">Export feedback_bounty_notes.md</button></p>
+          <div class="panel">
+            <div class="label">Add a note</div>
+            <select id="fb-kind" style="margin:10px 0">
+              <option value="ambiguous_market">Ambiguous market criteria</option>
+              <option value="tool_limitation">Something the agent could not do</option>
+              <option value="api_error">API problem</option>
+              <option value="note">Other</option>
+            </select>
+            <textarea id="fb-detail" rows="3" placeholder="What happened, and on which market?"></textarea>
+            <p><button id="fb-add">Add note</button></p>
+          </div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Type</th><th>Issue</th><th>Seen</th></tr></thead>
+            <tbody id="feedback"></tbody>
+          </table></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<div id="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>
