@@ -13,7 +13,8 @@ import { MockSearchProvider } from "../src/research/search";
 import { openDb } from "../src/db";
 
 const NOW = new Date("2026-11-24T12:00:00Z");
-const market = sampleMarkets(NOW)[4];
+// A market without listed data sources or an opening time: exercises the general search path.
+const market = { ...sampleMarkets(NOW)[6], dataSources: [], resolutionCriteria: null };
 
 function setup() {
   const db = openDb(":memory:");
@@ -150,5 +151,24 @@ describe("choosing a side from all the evidence", () => {
     expect(out.stance).toBe("YES");
     expect(out.links.some((l) => l.includes("github.com"))).toBe(false);
     expect(out.log.join()).toMatch(/Skipped NO evidence: leaning YES/);
+  });
+});
+
+describe("markets with official data sources", () => {
+  it("searches the data sources first and ignores facts from before the market opened", async () => {
+    const { db, deps } = setup();
+    const opened = new Date(NOW.getTime() - 1.5 * 86_400_000).toISOString();
+    const cpi = {
+      ...sampleMarkets(NOW)[2],
+      dataSources: ["https://www.destatis.de"],
+      resolutionCriteria: `Wins if the rate, published strictly after ${opened} and at or before ...`,
+    };
+    saveMarkets(db, [cpi]);
+    const found = await findCandidates(cpi, deps);
+    expect(new URL(found[0].url).hostname).toBe("destatis.de");
+    // The agency.example.gov release is 2 days old, from before the market opened.
+    expect(found.some((r) => r.url.includes("agency.example.gov/releases"))).toBe(false);
+    const out = await mineMarket(db, cpi, deps);
+    expect(out.links[0]).toContain("destatis.de");
   });
 });

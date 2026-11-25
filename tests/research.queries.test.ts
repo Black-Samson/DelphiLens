@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { classifySource, isFresh, isPaywalled, rankResults } from "../src/research/sources";
-import { coreTopic, decomposeQuestion, MAX_QUERIES } from "../src/research/queries";
+import { classifySource, isFresh, isPaywalled, marketOpenedAt, rankResults } from "../src/research/sources";
+import { coreTopic, dataSourceHosts, decomposeQuestion, MAX_QUERIES, searchPlan } from "../src/research/queries";
 
 const NOW = new Date("2026-11-24T12:00:00Z");
 const daysAgo = (d: number) => new Date(NOW.getTime() - d * 86_400_000).toISOString();
@@ -75,5 +75,41 @@ describe("ranking", () => {
       "https://www.reuters.com/a",
       "https://blog.com/a",
     ]);
+  });
+});
+
+describe("market data sources", () => {
+  const market = {
+    question: "Will Destatis's preliminary German CPI annual rate for Nov 2026 be 2.8% or higher?",
+    category: "official_statistics",
+    dataSources: ["https://www.destatis.de", "https://www-genesis.destatis.de/x", "https://www.reuters.com", "not a url"],
+  };
+
+  it("searches the market's official sources first", () => {
+    expect(dataSourceHosts(market)).toEqual(["destatis.de", "www-genesis.destatis.de"]);
+    const plan = searchPlan(market);
+    expect(plan[0]).toEqual({ query: coreTopic(market.question), domains: ["destatis.de", "www-genesis.destatis.de"] });
+    expect(plan.slice(1).every((q) => !q.domains)).toBe(true);
+    expect(plan.some((q) => q.query.includes("flash estimate"))).toBe(true);
+    expect(searchPlan({ ...market, dataSources: [] })[0].domains).toBeUndefined();
+  });
+
+  it("treats a market's data sources as primary", () => {
+    expect(classifySource("https://www.destatis.de/press/1")).toBe("other");
+    expect(classifySource("https://www.destatis.de/press/1", ["destatis.de"])).toBe("primary");
+  });
+
+  it("finds when the market opened from its resolution criteria", () => {
+    expect(marketOpenedAt('Wins if ... published strictly after 2026-11-24T09:17:34.007Z and at or before ...')).toBe(
+      "2026-11-24T09:17:34.007Z",
+    );
+    expect(marketOpenedAt("No timestamp here")).toBeNull();
+    expect(marketOpenedAt(null)).toBeNull();
+  });
+
+  it("treats facts from before the market opened as already priced", () => {
+    const opened = daysAgo(1);
+    expect(isFresh(daysAgo(3), null, 14, NOW, opened)).toBe(false);
+    expect(isFresh(daysAgo(0.5), null, 14, NOW, opened)).toBe(true);
   });
 });

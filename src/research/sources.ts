@@ -21,9 +21,10 @@ function host(url: string): string {
 
 const matches = (h: string, list: string[]) => list.some((d) => h === d || h.endsWith(`.${d}`));
 
-export function classifySource(url: string): SourceKind {
+/** `extraPrimary` adds hosts that count as primary for one market (its listed data sources). */
+export function classifySource(url: string, extraPrimary: string[] = []): SourceKind {
   const h = host(url);
-  if (matches(h, PRIMARY_HOSTS) || PRIMARY_SUFFIXES.some((s) => h.endsWith(s))) return "primary";
+  if (matches(h, PRIMARY_HOSTS) || matches(h, extraPrimary) || PRIMARY_SUFFIXES.some((s) => h.endsWith(s))) return "primary";
   if (matches(h, NEWS_HOSTS)) return "news";
   return "other";
 }
@@ -40,24 +41,43 @@ export function parseDate(value: string | null | undefined): Date | null {
 }
 
 /**
- * Is this publication date inside the fresh window?
- * Fresh means: no older than maxAgeDays, not in the future, and not after the evidence cutoff.
+ * When the market (and the forecaster's view of it) started, if Delphi says.
+ * The resolution criteria count results "published strictly after <time>"; that
+ * time is when the market was set up. Facts public before it are presumed priced.
  */
-export function isFresh(published: string | null, evidenceCutoff: string | null, maxAgeDays: number, now = new Date()): boolean {
+export function marketOpenedAt(resolutionCriteria: string | null | undefined): string | null {
+  const match = resolutionCriteria?.match(/strictly after (\d{4}-\d{2}-\d{2}T[\d:.]+Z)/);
+  return match ? (parseDate(match[1])?.toISOString() ?? null) : null;
+}
+
+/**
+ * Is this publication date inside the fresh window?
+ * Fresh means: no older than maxAgeDays, not before `notBefore` (the market's
+ * start), not in the future, and not after the evidence cutoff.
+ */
+export function isFresh(
+  published: string | null,
+  evidenceCutoff: string | null,
+  maxAgeDays: number,
+  now = new Date(),
+  notBefore: string | null = null,
+): boolean {
   const date = parseDate(published);
   if (!date) return false;
   const cutoff = parseDate(evidenceCutoff);
   const latest = cutoff && cutoff < now ? cutoff : now;
-  const earliest = new Date(now.getTime() - maxAgeDays * 86_400_000);
+  let earliest = new Date(now.getTime() - maxAgeDays * 86_400_000);
+  const start = parseDate(notBefore);
+  if (start && start > earliest) earliest = start;
   return date >= earliest && date <= latest;
 }
 
 const KIND_ORDER: Record<SourceKind, number> = { primary: 0, news: 1, other: 2 };
 
 /** Primary sources first, then newest first. Undated results go last in their group. */
-export function rankResults(results: SearchResult[]): SearchResult[] {
+export function rankResults(results: SearchResult[], extraPrimary: string[] = []): SearchResult[] {
   return [...results].sort((a, b) => {
-    const kind = KIND_ORDER[classifySource(a.url)] - KIND_ORDER[classifySource(b.url)];
+    const kind = KIND_ORDER[classifySource(a.url, extraPrimary)] - KIND_ORDER[classifySource(b.url, extraPrimary)];
     if (kind) return kind;
     return (parseDate(b.published)?.getTime() ?? 0) - (parseDate(a.published)?.getTime() ?? 0);
   });

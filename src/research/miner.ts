@@ -13,10 +13,10 @@ import { normalizeUrl } from "../hashing";
 import type { MarketInfo } from "../markets/types";
 import type { PageFetcher } from "./fetcher";
 import type { LLMProvider } from "./llm";
-import { decomposeQuestion } from "./queries";
+import { dataSourceHosts, searchPlan } from "./queries";
 import type { SearchProvider, SearchResult } from "./search";
 import { saveSnapshots } from "./snapshots";
-import { isFresh, isPaywalled, rankResults } from "./sources";
+import { isFresh, isPaywalled, marketOpenedAt, rankResults } from "./sources";
 import { composeNote } from "./note";
 import { findRepeat, type PriorNote } from "./samefact";
 import { BriefError, LLMOutputError, verifyEvidence, writeBrief, type Verification } from "./verifier";
@@ -76,10 +76,11 @@ export async function findCandidates(market: MarketInfo, deps: MinerDeps, limit 
   const now = deps.now?.() ?? new Date();
   const seen = new Set<string>();
   const merged: SearchResult[] = [];
-  for (const query of decomposeQuestion(market)) {
+  const opened = marketOpenedAt(market.resolutionCriteria);
+  for (const { query, domains } of searchPlan(market)) {
     let results: SearchResult[];
     try {
-      results = await deps.search.search(query);
+      results = await deps.search.search(query, undefined, domains ? { domains } : undefined);
     } catch (err) {
       deps.onIssue?.("search_error", (err as Error).message, { query });
       continue;
@@ -89,11 +90,11 @@ export async function findCandidates(market: MarketInfo, deps: MinerDeps, limit 
       if (seen.has(key) || isPaywalled(result.url)) continue;
       seen.add(key);
       // Undated results stay for now: the page itself may carry a date.
-      if (result.published && !isFresh(result.published, market.evidenceCutoff, deps.maxAgeDays, now)) continue;
+      if (result.published && !isFresh(result.published, market.evidenceCutoff, deps.maxAgeDays, now, opened)) continue;
       merged.push(result);
     }
   }
-  return rankResults(merged).slice(0, limit);
+  return rankResults(merged, dataSourceHosts(market)).slice(0, limit);
 }
 
 /** Find the best fresh evidence for one market and queue it as a draft. */
@@ -133,8 +134,8 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
       continue;
     }
     const result = { ...candidate, published: candidate.published ?? page.published };
-    if (!isFresh(result.published, market.evidenceCutoff, deps.maxAgeDays, now)) {
-      outcome.log.push(`No fresh publication date: ${candidate.url}`);
+    if (!isFresh(result.published, market.evidenceCutoff, deps.maxAgeDays, now, marketOpenedAt(market.resolutionCriteria))) {
+      outcome.log.push(`Not new since the market opened (or undated): ${candidate.url}`);
       continue;
     }
 
