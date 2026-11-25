@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { FEEDBACK_URL, type Settings } from "./config";
 import type { DB } from "./db";
 
 export type FeedbackKind =
@@ -22,6 +23,8 @@ export interface FeedbackEntry {
   count: number;
   created_at: string;
   last_seen: string;
+  sent_id: string | null;
+  sent_at: string | null;
 }
 
 const TITLES: Record<FeedbackKind, string> = {
@@ -96,4 +99,86 @@ export function exportFeedbackReport(db: DB, reportsDir: string, now = new Date(
   const file = path.join(reportsDir, "feedback_bounty_notes.md");
   fs.writeFileSync(file, renderFeedbackReport(listFeedback(db), now), "utf8");
   return file;
+}
+
+// ------------------------------------------------------- sending to Delphi
+
+/** Delphi's feedback areas: api, keys, markets, judging, rewards, docs, site, other. */
+const AREAS: Record<FeedbackKind, string> = {
+  api_error: "api",
+  rate_limit: "api",
+  poll_error: "api",
+  ambiguous_market: "markets",
+  tool_limitation: "other",
+  search_error: "other",
+  llm_error: "other",
+  note: "other",
+};
+
+export class FeedbackSendError extends Error {}
+
+/**
+ * Send one logged issue to https://feedback.delphi.fyi (the feedback bounty
+ * channel). Only called when you choose to send an entry: never automatically.
+ * Delphi allows 20 entries per key per UTC day.
+ */
+export async function sendFeedback(
+  db: DB,
+  settings: Settings,
+  id: number,
+  options: { area?: string; marketId?: string; submissionId?: string; fetch?: typeof fetch } = {},
+): Promise<string> {
+  const entry = listFeedback(db).find((e) => e.id === id);
+  if (!entry) throw new FeedbackSendError(`No feedback entry #${id}`);
+  if (entry.sent_id) throw new FeedbackSendError(`Entry #${id} was already sent (${entry.sent_id})`);
+  if (!settings.delphiApiKey) throw new FeedbackSendError("DELPHI_API_ACCESS_KEY is empty");
+  if (!/^0x[0-9a-fA-F]{40}$/.test(settings.delphiWallet)) {
+    throw new FeedbackSendError("Set DELPHI_WALLET in .env to the wallet your API key was created with");
+  }
+  const context = Object.entries(entry.context)
+    .filter(([, v]) => v !== null && v !== undefined && v !== "")
+    .map(([k, v]) => `${k}=${String(v)}`)
+    .join(", ");
+  const text = [
+    entry.detail,
+    entry.count > 1 ? `Seen ${entry.count} times between ${entry.created_at} and ${entry.last_seen} UTC.` : `Seen at ${entry.created_at} UTC.`,
+    context ? `Context: ${context}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, 4000);
+  const market = options.marketId ?? (typeof entry.context.market === "string" ? entry.context.market : undefined);
+  const res = await (options.fetch ?? fetch)(FEEDBACK_URL, {
+    method: "POST",
+    headers: {
+      "x-api-key": settings.delphiApiKey,
+      "Content-Type": "application/json",
+      "X-Agent-Id": settings.agentId,
+      "X-Agent-Harness": settings.agentHarness,
+      "X-Agent-Model": settings.agentModel,
+    },
+    body: JSON.stringify({
+      wallet: settings.delphiWallet,
+      area: options.area ?? AREAS[entry.kind],
+      title: `${TITLES[entry.kind]}: ${entry.detail}`.slice(0, 120),
+      text,
+      ...(market ? { marketId: market } : {}),
+      ...(options.submissionId ? { submissionId: options.submissionId } : {}),
+      topic: "agent-competition-evidence-mining",
+    }),
+  });
+  const body = (await res.json().catch(() => ({}))) as { id?: string; error?: string; message?: string; resetAt?: string };
+  if (res.status !== 201 || !body.id) {
+    const why =
+      res.status === 403
+        ? "the wallet does not match the API key"
+        : res.status === 429
+          ? `daily limit of 20 reached (resets ${body.resetAt ?? "tomorrow"})`
+          : res.status === 401
+            ? "the API key was rejected"
+            : (body.message ?? body.error ?? `HTTP ${res.status}`);
+    throw new FeedbackSendError(`Delphi did not accept the feedback: ${why}`);
+  }
+  db.prepare("UPDATE feedback SET sent_id = ?, sent_at = datetime('now') WHERE id = ?").run(body.id, id);
+  return body.id;
 }

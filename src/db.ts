@@ -79,6 +79,8 @@ const ADDED_COLUMNS: [table: string, column: string, type: string][] = [
   ["markets", "resolution_criteria", "TEXT"],
   ["markets", "data_sources", "TEXT NOT NULL DEFAULT '[]'"],
   ["markets", "category_label", "TEXT"],
+  ["feedback", "sent_id", "TEXT"],
+  ["feedback", "sent_at", "TEXT"],
 ];
 
 function migrate(db: Database.Database): void {

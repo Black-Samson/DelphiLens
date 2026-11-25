@@ -3,7 +3,9 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { openDb } from "../src/db";
-import { classify, exportFeedbackReport, listFeedback, logFeedback } from "../src/feedback";
+import { vi } from "vitest";
+import { loadSettings } from "../src/config";
+import { classify, exportFeedbackReport, listFeedback, logFeedback, sendFeedback } from "../src/feedback";
 
 describe("feedback tracker", () => {
   it("groups repeats of the same issue", () => {
@@ -38,5 +40,38 @@ describe("feedback tracker", () => {
   it("says when there is nothing to report", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fb-"));
     expect(fs.readFileSync(exportFeedbackReport(openDb(":memory:"), dir), "utf8")).toContain("No issues recorded yet.");
+  });
+});
+
+describe("sending feedback to Delphi", () => {
+  const WALLET = "0x" + "b".repeat(40);
+  const settings = loadSettings({ DELPHI_API_ACCESS_KEY: "key-1", DELPHI_WALLET: WALLET, AGENT_MODEL: "gpt-4o-mini" });
+
+  it("posts the entry with key, wallet, area and agent headers, then marks it sent", async () => {
+    const db = openDb(":memory:");
+    logFeedback(db, "api_error", "market_not_found: unknown market", { market: "0xabc", status: 404 });
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ id: "fb_1", createdAt: "x" }), { status: 201 }));
+    const id = listFeedback(db)[0].id;
+    expect(await sendFeedback(db, settings, id, { fetch: fetchFn as unknown as typeof fetch })).toBe("fb_1");
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://feedback.delphi.fyi/v1/feedback");
+    expect(init.headers).toMatchObject({ "x-api-key": "key-1", "X-Agent-Id": "DelphiLens", "X-Agent-Model": "gpt-4o-mini" });
+    const body = JSON.parse(init.body as string);
+    expect(body).toMatchObject({ wallet: WALLET, area: "api", marketId: "0xabc", topic: "agent-competition-evidence-mining" });
+    expect(body.title.length).toBeLessThanOrEqual(120);
+    expect(body.text).toContain("Context: market=0xabc, status=404");
+    expect(listFeedback(db)[0].sent_id).toBe("fb_1");
+    await expect(sendFeedback(db, settings, id, { fetch: fetchFn as unknown as typeof fetch })).rejects.toThrow(/already sent/);
+  });
+
+  it("needs the wallet and explains Delphi's refusals", async () => {
+    const db = openDb(":memory:");
+    logFeedback(db, "note", "Docs do not say which timezone cutoffs use");
+    const id = listFeedback(db)[0].id;
+    await expect(sendFeedback(db, loadSettings({ DELPHI_API_ACCESS_KEY: "k" }), id)).rejects.toThrow(/DELPHI_WALLET/);
+    const refuse = async () => new Response(JSON.stringify({ error: "wallet_mismatch" }), { status: 403 });
+    await expect(sendFeedback(db, settings, id, { fetch: refuse as unknown as typeof fetch })).rejects.toThrow(/wallet does not match/);
+    expect(listFeedback(db)[0].sent_id).toBeNull();
+    await expect(sendFeedback(db, settings, 999)).rejects.toThrow(/No feedback entry/);
   });
 });

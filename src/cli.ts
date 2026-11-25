@@ -1,7 +1,7 @@
 import { createApp, minerDeps } from "./app";
 import { deliverDigest } from "./delivery";
 import { formatChecks, runDoctor } from "./doctor";
-import { exportFeedbackReport } from "./feedback";
+import { exportFeedbackReport, listFeedback, sendFeedback } from "./feedback";
 import { discardDraft } from "./guardrails";
 import { loadSettings } from "./config";
 import { openDb, setRuntimeFlag } from "./db";
@@ -26,7 +26,8 @@ const HELP = `DelphiLens commands (run with: npm start -- <command>)
   cycle                  Run one full worker cycle
   worker                 Run the worker loop (Ctrl+C to stop)
   digest [--send]        Write today's digest (and send it if --send)
-  feedback               Export reports/feedback_bounty_notes.md
+  feedback               List logged issues and export reports/feedback_bounty_notes.md
+  feedback --send <id>   Send one logged issue to Delphi's feedback API (bounties)
   terms [--accept <v>]   Show Delphi's evidence terms, or accept a version you have read
   mock on|off            Switch mock mode (overrides MOCK_MODE in .env)
 `;
@@ -125,9 +126,20 @@ async function main(argv: string[]): Promise<void> {
         }
         break;
       }
-      case "feedback":
-        console.log(`Saved ${exportFeedbackReport(app.db, app.settings.reportsDir)}`);
+      case "feedback": {
+        const i = args.indexOf("--send");
+        if (i !== -1) {
+          const sentId = await sendFeedback(app.db, app.settings, Number(args[i + 1]));
+          console.log(`Sent feedback #${args[i + 1]} to Delphi (id ${sentId})`);
+          break;
+        }
+        for (const e of listFeedback(app.db)) {
+          console.log(`#${e.id} [${e.kind}] ${e.detail} (${e.count}x)${e.sent_id ? " - sent" : ""}`);
+        }
+        console.log(`\nSaved ${exportFeedbackReport(app.db, app.settings.reportsDir)}`);
+        console.log("Send one to Delphi with: npm start -- feedback --send <id>");
         break;
+      }
       case "terms": {
         const { data } = await app.evidence.getTerms();
         console.log(`Terms version ${data.version}: ${data.url}`);

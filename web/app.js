@@ -227,8 +227,11 @@ async function loadNewsletter() {
   const feedback = await api("GET", "/api/feedback");
   $("feedback").innerHTML =
     feedback
-      .map((f) => `<tr><td><span class="pill">${esc(f.kind)}</span></td><td>${esc(f.detail)}</td><td>${f.count}×</td></tr>`)
-      .join("") || `<tr><td colspan="3" class="muted">No issues logged.</td></tr>`;
+      .map(
+        (f) => `<tr><td><span class="pill">${esc(f.kind)}</span></td><td>${esc(f.detail)}</td><td>${f.count}×</td>
+          <td>${f.sent_id ? `<span class="muted">Sent</span>` : `<button class="ghost" data-send-feedback="${f.id}">Send to Delphi</button>`}</td></tr>`,
+      )
+      .join("") || `<tr><td colspan="4" class="muted">No issues logged.</td></tr>`;
 }
 
 $("digest-generate").addEventListener("click", (e) =>
@@ -250,6 +253,15 @@ $("feedback-export").addEventListener("click", (e) =>
     toast(`Saved reports/${r.file}`);
   }),
 );
+$("feedback").addEventListener("click", (e) => {
+  const button = e.target.closest("button[data-send-feedback]");
+  if (!button) return;
+  busy(button, async () => {
+    const r = await api("POST", `/api/feedback/${button.dataset.sendFeedback}/send`);
+    toast(`Sent to Delphi's feedback team (id ${r.id})`);
+    loadNewsletter();
+  });
+});
 $("fb-add").addEventListener("click", (e) =>
   busy(e.target, async () => {
     await api("POST", "/api/feedback", { kind: $("fb-kind").value, detail: $("fb-detail").value });

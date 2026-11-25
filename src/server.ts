@@ -6,7 +6,7 @@ import { createApp, minerDeps, type App } from "./app";
 import { ROOT } from "./config";
 import { setRuntimeFlag } from "./db";
 import { deliverDigest } from "./delivery";
-import { exportFeedbackReport, listFeedback, logFeedback } from "./feedback";
+import { exportFeedbackReport, listFeedback, logFeedback, sendFeedback } from "./feedback";
 import { countSubmissions, discardDraft, getLockedStance } from "./guardrails";
 import { fetchMarkets } from "./markets/source";
 import { getMarket, listMarkets, saveMarkets } from "./markets/store";
@@ -120,6 +120,7 @@ export function createHandler(makeApp: () => App) {
       logFeedback(app.db, String(body.kind ?? "note"), detail, {}, "operator");
       return { ok: true };
     }],
+    ["POST", /^\/api\/feedback\/(\d+)\/send$/, async (m) => ({ id: await sendFeedback(app.db, app.settings, Number(m[1])) })],
     ["POST", /^\/api\/feedback\/export$/, async () => ({
       file: path.basename(exportFeedbackReport(app.db, app.settings.reportsDir)),
       markdown: fs.readFileSync(path.join(app.settings.reportsDir, "feedback_bounty_notes.md"), "utf8"),
