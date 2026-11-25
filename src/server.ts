@@ -9,7 +9,7 @@ import { deliverDigest } from "./delivery";
 import { exportFeedbackReport, listFeedback, logFeedback, sendFeedback } from "./feedback";
 import { countSubmissions, discardDraft, getLockedStance } from "./guardrails";
 import { fetchMarkets } from "./markets/source";
-import { getMarket, listMarkets, saveMarkets } from "./markets/store";
+import { getMarket, listMarkets, syncMarkets } from "./markets/store";
 import { buildDigest, latestDigest, renderHtml, renderMarkdown, saveDigest } from "./newsletter";
 import { mineMarket } from "./research/miner";
 import { computeStats, earningsSeries } from "./stats";
@@ -76,6 +76,14 @@ export function createHandler(makeApp: () => App) {
       const old = app;
       app = next;
       old.db.close();
+      // Switching between practice and live: show only the markets of the new mode.
+      if (previous.mockMode !== app.settings.mockMode) {
+        try {
+          syncMarkets(app.db, await fetchMarkets(app.settings));
+        } catch (err) {
+          app.report("api_error", `Market refresh after switching mode failed: ${(err as Error).message}`);
+        }
+      }
       return { mockMode: app.settings.mockMode, autoSubmit: app.settings.autoSubmit, modes: app.modes };
     }],
     ["GET", /^\/api\/markets$/, async () =>
@@ -84,7 +92,7 @@ export function createHandler(makeApp: () => App) {
         stance: getLockedStance(app.db, m.marketId) ?? "OPEN",
         used: countSubmissions(app.db, m.marketId),
       }))],
-    ["POST", /^\/api\/markets\/refresh$/, async () => ({ new: saveMarkets(app.db, await fetchMarkets(app.settings)).length })],
+    ["POST", /^\/api\/markets\/refresh$/, async () => ({ new: syncMarkets(app.db, await fetchMarkets(app.settings)).length })],
     ["POST", /^\/api\/markets\/([^/]+)\/mine$/, async (m) => {
       const market = getMarket(app.db, decodeURIComponent(m[1]));
       if (!market) throw new HttpError(404, "Unknown market");

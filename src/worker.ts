@@ -4,7 +4,7 @@ import { minerDeps, type App } from "./app";
 import { deliverDigest } from "./delivery";
 import { prioritizeMarkets } from "./guardrails";
 import { fetchMarkets } from "./markets/source";
-import { getMarket, saveMarkets } from "./markets/store";
+import { getMarket, syncMarkets } from "./markets/store";
 import { buildDigest, renderHtml, renderMarkdown, saveDigest } from "./newsletter";
 import { mineMarket } from "./research/miner";
 import { pollSubmissions, submitDraft, SubmitBlockedError } from "./submitter";
@@ -102,13 +102,7 @@ export async function runCycle(app: App, opts: CycleOptions = {}): Promise<Cycle
   try {
     const markets = await fetchMarkets(app.settings, { now });
     summary.marketsSeen = markets.length;
-    summary.newMarkets = saveMarkets(app.db, markets).length;
-    if (markets.length) {
-      const ids = markets.map((m) => m.marketId);
-      app.db
-        .prepare(`UPDATE markets SET status = 'closed' WHERE market_id NOT IN (${ids.map(() => "?").join(",")})`)
-        .run(...ids);
-    }
+    summary.newMarkets = syncMarkets(app.db, markets).length;
     log(`Markets: ${markets.length} open, ${summary.newMarkets} new`);
 
     // Getting there first matters: brand-new markets go to the front of the queue.
@@ -198,7 +192,7 @@ export async function checkForNewMarkets(makeApp: () => App, log: (line: string)
   try {
     const app = makeApp();
     try {
-      const fresh = saveMarkets(app.db, await fetchMarkets(app.settings)).length;
+      const fresh = syncMarkets(app.db, await fetchMarkets(app.settings)).length;
       if (fresh) log(`${fresh} new market(s) opened: mining now`);
       return fresh;
     } finally {

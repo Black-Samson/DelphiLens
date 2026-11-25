@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { loadSettings } from "../src/config";
 import { openDb } from "../src/db";
 import { fetchMarkets } from "../src/markets/source";
-import { getMarket, listMarkets, saveMarkets } from "../src/markets/store";
+import { getMarket, listMarkets, saveMarkets, syncMarkets } from "../src/markets/store";
 
 describe("market sources", () => {
   it("returns sample markets in mock mode", async () => {
@@ -42,5 +42,18 @@ describe("market store", () => {
     expect(saveMarkets(db, [{ ...markets[0], yesOdds: 0.9 }])).toEqual([]);
     expect(getMarket(db, markets[0].marketId)?.yesOdds).toBe(0.9);
     expect(listMarkets(db)).toHaveLength(markets.length);
+  });
+});
+
+describe("syncing the market list", () => {
+  it("hides stored markets that are no longer listed, but never on an empty list", async () => {
+    const db = openDb(":memory:");
+    const practice = await fetchMarkets(loadSettings({}));
+    syncMarkets(db, practice);
+    const live = [{ ...practice[0], marketId: "0xlive", question: "Real market?" }];
+    expect(syncMarkets(db, live)).toEqual(["0xlive"]);
+    expect(listMarkets(db).map((m) => m.marketId)).toEqual(["0xlive"]);
+    syncMarkets(db, []);
+    expect(listMarkets(db)).toHaveLength(1);
   });
 });

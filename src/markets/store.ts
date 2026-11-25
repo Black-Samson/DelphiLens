@@ -60,6 +60,20 @@ export function saveMarkets(db: DB, markets: MarketInfo[]): string[] {
   return fresh;
 }
 
+/**
+ * Save the current market list and hide every stored market that is not in it,
+ * so practice (mock) markets or closed markets never show up as open in live mode.
+ * Returns the ids that were new. An empty list changes nothing (likely an outage).
+ */
+export function syncMarkets(db: DB, markets: MarketInfo[]): string[] {
+  const fresh = saveMarkets(db, markets);
+  if (markets.length) {
+    const ids = markets.map((m) => m.marketId);
+    db.prepare(`UPDATE markets SET status = 'closed' WHERE market_id NOT IN (${ids.map(() => "?").join(",")})`).run(...ids);
+  }
+  return fresh;
+}
+
 export function getMarket(db: DB, marketId: string): MarketInfo | null {
   const row = db.prepare("SELECT * FROM markets WHERE market_id = ?").get(marketId) as MarketRow | undefined;
   return row ? fromRow(row) : null;

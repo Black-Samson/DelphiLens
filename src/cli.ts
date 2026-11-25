@@ -6,7 +6,7 @@ import { discardDraft } from "./guardrails";
 import { loadSettings } from "./config";
 import { openDb, setRuntimeFlag } from "./db";
 import { fetchMarkets } from "./markets/source";
-import { getMarket, listMarkets, saveMarkets } from "./markets/store";
+import { getMarket, listMarkets, syncMarkets } from "./markets/store";
 import { buildDigest, renderHtml, renderMarkdown, saveDigest } from "./newsletter";
 import { mineMarket } from "./research/miner";
 import { computeStats } from "./stats";
@@ -72,7 +72,7 @@ async function main(argv: string[]): Promise<void> {
         break;
       }
       case "markets": {
-        saveMarkets(app.db, await fetchMarkets(app.settings));
+        syncMarkets(app.db, await fetchMarkets(app.settings));
         for (const m of listMarkets(app.db)) {
           const odds = m.yesOdds === null ? "  ?" : `${Math.round(m.yesOdds * 100)}%`.padStart(4);
           console.log(`${odds}  ${m.rewardPot.toFixed(0).padStart(5)} USDC  ${m.marketId}  ${m.question}`);
@@ -80,7 +80,7 @@ async function main(argv: string[]): Promise<void> {
         break;
       }
       case "mine": {
-        saveMarkets(app.db, await fetchMarkets(app.settings));
+        syncMarkets(app.db, await fetchMarkets(app.settings));
         const market = args[0] ? getMarket(app.db, args[0]) : listMarkets(app.db)[0];
         if (!market) throw new Error(`Unknown market ${args[0]}`);
         const out = await mineMarket(app.db, market, minerDeps(app));
