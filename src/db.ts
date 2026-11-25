@@ -74,6 +74,20 @@ CREATE TABLE IF NOT EXISTS runtime_settings (
 );
 `;
 
+/** Columns added after the first release. Older databases get them on open. */
+const ADDED_COLUMNS: [table: string, column: string, type: string][] = [
+  ["markets", "resolution_criteria", "TEXT"],
+  ["markets", "data_sources", "TEXT NOT NULL DEFAULT '[]'"],
+  ["markets", "category_label", "TEXT"],
+];
+
+function migrate(db: Database.Database): void {
+  for (const [table, column, type] of ADDED_COLUMNS) {
+    const has = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
+    if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+}
+
 /** Open (and create if needed) the DelphiLens database. Use ":memory:" in tests. */
 export function openDb(dbPath: string): DB {
   if (dbPath !== ":memory:") fs.mkdirSync(path.dirname(dbPath), { recursive: true });
@@ -81,6 +95,7 @@ export function openDb(dbPath: string): DB {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
+  migrate(db);
   return db;
 }
 

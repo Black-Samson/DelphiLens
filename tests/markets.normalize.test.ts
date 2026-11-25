@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import { normalizeMarket, normalizeMarketList } from "../src/markets/normalize";
+import { openDb } from "../src/db";
+import { getMarket, saveMarkets } from "../src/markets/store";
 
 describe("market normalizer", () => {
   it("reads camelCase fields", () => {
@@ -21,6 +25,9 @@ describe("market normalizer", () => {
       evidenceCutoff: "2026-12-09T17:00:00.000Z",
       rewardPot: 250.5,
       url: null,
+      resolutionCriteria: null,
+      dataSources: [],
+      categoryLabel: null,
     });
   });
 
@@ -52,5 +59,27 @@ describe("market normalizer", () => {
   it("ignores impossible odds", () => {
     expect(normalizeMarket({ id: "0x1", question: "Q?", yesOdds: 250 })?.yesOdds).toBeNull();
     expect(normalizeMarket({ id: "0x1", question: "Q?", yesOdds: -1 })?.yesOdds).toBeNull();
+  });
+
+  it("reads the real competition markets.json format", () => {
+    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures/markets.json"), "utf8"));
+    const [cpi, vox] = normalizeMarketList(raw);
+    expect(cpi).toMatchObject({
+      marketId: "0x0d79f61a3cf6c6a83501fcb6abd22eddb4ab6a58",
+      category: "official_statistics",
+      categoryLabel: "Official statistics",
+      yesOdds: 0.568,
+      closeTime: "2026-11-30T08:00:00.000Z",
+      evidenceCutoff: "2026-11-29T08:00:00.000Z",
+      rewardPot: 20,
+      url: "https://delphi.fyi/market/0x0d79f61a3cf6c6a83501fcb6abd22eddb4ab6a58",
+      dataSources: ["https://www.destatis.de", "https://www-genesis.destatis.de"],
+    });
+    expect(cpi.resolutionCriteria).toContain("2.8% or higher");
+    expect(vox.yesOdds).toBe(0.483);
+
+    const db = openDb(":memory:");
+    saveMarkets(db, [cpi]);
+    expect(getMarket(db, cpi.marketId)).toMatchObject({ dataSources: cpi.dataSources, categoryLabel: "Official statistics" });
   });
 });

@@ -10,6 +10,9 @@ interface MarketRow {
   evidence_cutoff: string | null;
   reward_pot: number | null;
   url: string | null;
+  resolution_criteria: string | null;
+  data_sources: string | null;
+  category_label: string | null;
 }
 
 function fromRow(row: MarketRow): MarketInfo {
@@ -22,6 +25,9 @@ function fromRow(row: MarketRow): MarketInfo {
     evidenceCutoff: row.evidence_cutoff,
     rewardPot: row.reward_pot ?? 0,
     url: row.url,
+    resolutionCriteria: row.resolution_criteria,
+    dataSources: JSON.parse(row.data_sources || "[]"),
+    categoryLabel: row.category_label,
   };
 }
 
@@ -29,17 +35,26 @@ function fromRow(row: MarketRow): MarketInfo {
 export function saveMarkets(db: DB, markets: MarketInfo[]): string[] {
   const exists = db.prepare("SELECT 1 FROM markets WHERE market_id = ?");
   const upsert = db.prepare(`
-    INSERT INTO markets (market_id, question, category, yes_odds, close_time, evidence_cutoff, reward_pot, url, status)
-    VALUES (@marketId, @question, @category, @yesOdds, @closeTime, @evidenceCutoff, @rewardPot, @url, 'open')
+    INSERT INTO markets (market_id, question, category, yes_odds, close_time, evidence_cutoff, reward_pot, url,
+                         resolution_criteria, data_sources, category_label, status)
+    VALUES (@marketId, @question, @category, @yesOdds, @closeTime, @evidenceCutoff, @rewardPot, @url,
+            @resolutionCriteria, @dataSources, @categoryLabel, 'open')
     ON CONFLICT(market_id) DO UPDATE SET
       question = excluded.question, category = excluded.category, yes_odds = excluded.yes_odds,
       close_time = excluded.close_time, evidence_cutoff = excluded.evidence_cutoff,
-      reward_pot = excluded.reward_pot, url = excluded.url, status = 'open', updated_at = datetime('now')`);
+      reward_pot = excluded.reward_pot, url = excluded.url, resolution_criteria = excluded.resolution_criteria,
+      data_sources = excluded.data_sources, category_label = excluded.category_label,
+      status = 'open', updated_at = datetime('now')`);
   const fresh: string[] = [];
   db.transaction(() => {
     for (const market of markets) {
       if (!exists.get(market.marketId)) fresh.push(market.marketId);
-      upsert.run(market);
+      upsert.run({
+        ...market,
+        resolutionCriteria: market.resolutionCriteria ?? null,
+        dataSources: JSON.stringify(market.dataSources ?? []),
+        categoryLabel: market.categoryLabel ?? null,
+      });
     }
   })();
   return fresh;

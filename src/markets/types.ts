@@ -8,7 +8,13 @@ export interface MarketInfo {
   yesOdds: number | null;
   closeTime: string | null;
   evidenceCutoff: string | null;
-  /** Reward pot in USDC.e (human units, not base units). */
+  /** Judgment reward pot in USDC.e (human units, not base units). */
   rewardPot: number;
   url: string | null;
+  /** How the market resolves, word for word from Delphi. */
+  resolutionCriteria?: string | null;
+  /** Official sources the market resolves from. Research looks here first. */
+  dataSources?: string[];
+  /** Readable category name, e.g. "Official statistics". */
+  categoryLabel?: string | null;
 }

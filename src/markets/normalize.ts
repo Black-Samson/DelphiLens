@@ -10,10 +10,10 @@ const PICK = {
   question: ["question", "title", "name"],
   category: ["category", "topic"],
   yesOdds: ["yesOdds", "yes_odds", "yesPrice", "yes_price", "probability", "yesProbability"],
-  closeTime: ["closeTime", "close_time", "closesAt", "closes_at", "resolvesAt", "settlesAt"],
-  evidenceCutoff: ["evidenceCutoff", "evidence_cutoff", "evidenceDeadline", "cutoff"],
+  closeTime: ["closesAt", "closeTime", "close_time", "closes_at", "resolvesAt", "settlesAt"],
+  evidenceCutoff: ["evidenceCutoffAt", "evidenceCutoff", "evidence_cutoff", "evidenceDeadline", "cutoff"],
   rewardPot: ["rewardPot", "reward_pot", "pot", "judgementPot", "reward"],
-  url: ["url", "marketUrl", "market_url", "link"],
+  url: ["delphiUrl", "url", "marketUrl", "market_url", "link"],
 } as const;
 
 type Raw = Record<string, unknown>;
@@ -47,14 +47,23 @@ function asDate(value: unknown): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-/** Odds may arrive as 0.62, 62 (percent) or a [yes, no] pair. */
+/** Odds may arrive as 0.62, 62 (percent), a [yes, no] pair or { yes, no }. */
 function asOdds(raw: Raw): number | null {
   const pair = raw.spotImpliedProbabilities ?? raw.odds ?? raw.prices;
   if (Array.isArray(pair) && pair.length > 0) return asOdds({ yesOdds: pair[0] });
+  if (pair && typeof pair === "object" && "yes" in pair) return asOdds({ yesOdds: (pair as Raw).yes });
   const value = asNumber(pick(raw, PICK.yesOdds));
   if (value === null || value < 0) return null;
   const odds = value > 1 ? value / 100 : value;
   return odds <= 1 ? Math.round(odds * 1000) / 1000 : null;
+}
+
+/** USDC.e has 6 decimals. Pots in the competition list are base-unit strings. */
+function judgementPot(raw: Raw): number {
+  const pots = raw.pots && typeof raw.pots === "object" ? (raw.pots as Raw) : null;
+  const base = pots ? (pots.judgement ?? pots.judgment) : undefined;
+  if (typeof base === "string" && /^\d+$/.test(base)) return Number(base) / 1e6;
+  return asNumber(pick(raw, PICK.rewardPot)) ?? 0;
 }
 
 export function normalizeMarket(input: unknown): MarketInfo | null {
@@ -71,8 +80,11 @@ export function normalizeMarket(input: unknown): MarketInfo | null {
     yesOdds: asOdds(raw),
     closeTime: asDate(pick(raw, PICK.closeTime)),
     evidenceCutoff: asDate(pick(raw, PICK.evidenceCutoff)),
-    rewardPot: asNumber(pick(raw, PICK.rewardPot)) ?? 0,
+    rewardPot: judgementPot(raw),
     url: asString(pick(raw, PICK.url)),
+    resolutionCriteria: asString(raw.resolutionCriteria ?? raw.resolution_criteria),
+    dataSources: Array.isArray(raw.dataSources) ? raw.dataSources.filter((d): d is string => typeof d === "string") : [],
+    categoryLabel: asString(raw.categoryLabel),
   };
 }
 
