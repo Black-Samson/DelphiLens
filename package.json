@@ -17,7 +17,7 @@
     "check": "npm run lint && npm run typecheck && npm test"
   },
   "dependencies": {
-    "@gensyn-ai/gensyn-delphi-sdk": "^2.4.0",
+    "@gensyn-ai/gensyn-delphi-sdk": "^2.4.1",
     "better-sqlite3": "^13.2.0",
     "cheerio": "^1.2.0",
     "dotenv": "^18.0.10",
