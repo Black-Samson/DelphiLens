@@ -63,6 +63,17 @@ describe("verifier", () => {
     expect(findQuote(GOOD, 42)).toBeNull();
   });
 
+  it("gives the LLM the resolution criteria and when the market opened", async () => {
+    const llm = new Scripted([JSON.stringify({ publicly_accessible: true, verifiable: true, shifts_probability: false })]);
+    const withCriteria = {
+      ...market,
+      resolutionCriteria: "Yes wins if the rate, published strictly after 2026-11-24T09:17:34.007Z, is 2.8% or higher.",
+    };
+    await verifyEvidence(llm, withCriteria, result, "x");
+    expect(llm.prompts[0]).toContain("MARKET_OPENED: 2026-11-24T09:17:34.007Z");
+    expect(llm.prompts[0]).toContain("RESOLUTION_CRITERIA: Yes wins if the rate");
+  });
+
   it("cleans messy LLM output", async () => {
     const llm = new Scripted([
       JSON.stringify({ publicly_accessible: "false", verifiable: true, shifts_probability: true, stance: "yes", confidence: 5 }),

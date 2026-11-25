@@ -2,6 +2,7 @@ import { isStance, type Stance } from "../guardrails";
 import type { MarketInfo } from "../markets/types";
 import { splitSentences, type LLMProvider } from "./llm";
 import type { SearchResult } from "./search";
+import { marketOpenedAt } from "./sources";
 
 export const MAX_BRIEF_CHARS = 700;
 const MAX_TEXT_CHARS = 6000;
@@ -44,15 +45,22 @@ export function parseJsonObject(raw: string): Record<string, unknown> {
 
 const asBool = (v: unknown) => (typeof v === "string" ? ["true", "yes", "1"].includes(v.trim().toLowerCase()) : Boolean(v));
 
+const MAX_CRITERIA_CHARS = 1500;
+
 function header(task: string, market: MarketInfo, result: SearchResult): string {
-  return [
+  const lines = [
     `TASK: ${task}`,
     `QUESTION: ${market.question}`,
     `CURRENT_YES_ODDS: ${market.yesOdds ?? "unknown"}`,
     `EVIDENCE_CUTOFF: ${market.evidenceCutoff ?? "unknown"}`,
-    `SOURCE_URL: ${result.url}`,
-    `PUBLISHED: ${result.published ?? ""}`,
-  ].join("\n");
+  ];
+  const opened = marketOpenedAt(market.resolutionCriteria);
+  if (opened) lines.push(`MARKET_OPENED: ${opened} (facts public before this are presumed already priced)`);
+  if (market.resolutionCriteria) {
+    lines.push(`RESOLUTION_CRITERIA: ${market.resolutionCriteria.replace(/\s+/g, " ").slice(0, MAX_CRITERIA_CHARS)}`);
+  }
+  lines.push(`SOURCE_URL: ${result.url}`, `PUBLISHED: ${result.published ?? ""}`);
+  return lines.join("\n");
 }
 
 const squash = (t: string) => t.replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/\s+/g, " ").trim();
@@ -76,8 +84,9 @@ export async function verifyEvidence(llm: LLMProvider, market: MarketInfo, resul
     "Check three things about the TEXT:",
     "1. publicly_accessible: readable by anyone, no paywall, no confidential, leaked or private personal data.",
     "2. verifiable: a specific, dated fact that can be checked in the source (not rumor or opinion).",
-    "3. shifts_probability: new information that should move the probability of the question resolving YES,",
-    "   beyond what the current odds already reflect.",
+    "3. shifts_probability: new information that should move the probability of the question resolving YES",
+    "   under the RESOLUTION_CRITERIA, beyond what the current odds already reflect. Facts that were public",
+    "   before MARKET_OPENED, opinions and predictions do not count.",
     'Reply with JSON keys: publicly_accessible (bool), verifiable (bool), shifts_probability (bool),',
     'stance ("YES" if it makes YES more likely, "NO" if less likely, or null), confidence (0 to 1), reason (one sentence),',
     "fact (the fact in one plain sentence, with its date), and quote (the single sentence from the TEXT that states",
