@@ -1,3 +1,5 @@
+import { fetchFrom } from "../net";
+
 export interface SearchResult {
   title: string;
   url: string;
@@ -81,11 +83,16 @@ export class TavilySearchProvider implements SearchProvider {
     const body = domains.length
       ? { query, max_results: maxResults, topic: "general", include_domains: domains, search_depth: "advanced" }
       : { query, max_results: maxResults, topic: "news", days: this.maxAgeDays, search_depth: "basic" };
-    const res = await this.fetchFn("https://api.tavily.com/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.apiKey}` },
-      body: JSON.stringify(body),
-    });
+    const res = await fetchFrom(
+      "Tavily search",
+      "https://api.tavily.com/search",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.apiKey}` },
+        body: JSON.stringify(body),
+      },
+      this.fetchFn,
+    );
     if (!res.ok) throw new Error(`Tavily search returned HTTP ${res.status}`);
     const json = (await res.json()) as { results?: TavilyResult[] };
     return (json.results ?? [])

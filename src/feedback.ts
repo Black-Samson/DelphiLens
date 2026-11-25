@@ -3,6 +3,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { FEEDBACK_URL, type Settings } from "./config";
 import type { DB } from "./db";
+import { fetchFrom } from "./net";
 
 export type FeedbackKind =
   | "api_error"
@@ -148,7 +149,7 @@ export async function sendFeedback(
     .join("\n")
     .slice(0, 4000);
   const market = options.marketId ?? (typeof entry.context.market === "string" ? entry.context.market : undefined);
-  const res = await (options.fetch ?? fetch)(FEEDBACK_URL, {
+  const res = await fetchFrom("Delphi feedback", FEEDBACK_URL, {
     method: "POST",
     headers: {
       "x-api-key": settings.delphiApiKey,
@@ -166,7 +167,7 @@ export async function sendFeedback(
       ...(options.submissionId ? { submissionId: options.submissionId } : {}),
       topic: "agent-competition-evidence-mining",
     }),
-  });
+  }, options.fetch ?? fetch);
   const body = (await res.json().catch(() => ({}))) as { id?: string; error?: string; message?: string; resetAt?: string };
   if (res.status !== 201 || !body.id) {
     const why =

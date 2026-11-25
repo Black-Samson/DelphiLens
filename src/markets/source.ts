@@ -1,5 +1,6 @@
 import { DelphiClient, type Network } from "@gensyn-ai/gensyn-delphi-sdk";
 import type { Settings } from "../config";
+import { fetchFrom } from "../net";
 import { sampleMarkets } from "./mock";
 import { normalizeMarket, normalizeMarketList } from "./normalize";
 import type { MarketInfo } from "./types";
@@ -18,9 +19,12 @@ export async function fetchMarkets(settings: Settings, deps: MarketSourceDeps = 
 
     case "url": {
       if (!settings.marketsUrl) throw new Error("MARKETS_SOURCE=url needs MARKETS_URL");
-      const res = await (deps.fetch ?? fetch)(settings.marketsUrl, {
-        headers: { Accept: "application/json", "X-Agent-Id": settings.agentId },
-      });
+      const res = await fetchFrom(
+        "the competition market list (MARKETS_URL)",
+        settings.marketsUrl,
+        { headers: { Accept: "application/json", "X-Agent-Id": settings.agentId } },
+        deps.fetch ?? fetch,
+      );
       if (!res.ok) throw new Error(`Market list returned HTTP ${res.status}`);
       return normalizeMarketList(await res.json());
     }

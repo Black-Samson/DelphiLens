@@ -1,3 +1,4 @@
+import { fetchFrom } from "../net";
 import { mockSameFact } from "./samefact";
 
 export interface LLMProvider {
@@ -41,7 +42,7 @@ export class OpenAICompatibleLLM implements LLMProvider {
   }
 
   private request(system: string, prompt: string): Promise<Response> {
-    return this.fetchFn(`${this.baseUrl}/chat/completions`, {
+    return fetchFrom("the AI service (LLM_BASE_URL)", `${this.baseUrl}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.apiKey}` },
       body: JSON.stringify({
@@ -53,7 +54,7 @@ export class OpenAICompatibleLLM implements LLMProvider {
           { role: "user", content: prompt },
         ],
       }),
-    });
+    }, this.fetchFn);
   }
 }
 
