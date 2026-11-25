@@ -40,9 +40,9 @@ flowchart LR
 | --- | --- |
 | **Official SDK** | `@gensyn-ai/gensyn-delphi-sdk` 2.4: `submitEvidence`, `getSubmission`, `listSubmissions`, `getEntryState`, `getTerms`, idempotent retries |
 | **Agent identity** | `X-Agent-Id: DelphiLens`, `X-Agent-Harness` and `X-Agent-Model` on every request; `AGENT_ID` is locked |
-| **Mock mode** | Offline markets, search, LLM and judge, so everything can be tested before 25 November |
+| **Mock mode** | Offline markets, search, LLM and judge, shaped like the live competition, for safe testing |
 | **Safety** | Live mode refuses to run without real search and LLM keys, so mock evidence can never be submitted |
-| **Guardrails** | No self-contradiction, max 3 per market, max 3 files, URL and claim dedupe, same-fact check, qualification prioritizer |
+| **Guardrails** | No self-contradiction, max 3 per market, max 3 items per submission, URL and claim dedupe, same-fact check, qualification prioritizer |
 | **Judge-ready notes** | Summary plus word-for-word quotes with publisher, date and link, so the judge sees the evidence even when it cannot open a page |
 | **Stance by weight of evidence** | YES and NO evidence weighed by confidence before a market's side is locked; mixed markets are skipped |
 | **First to new markets** | Checks for new markets every 5 minutes and mines them first |
@@ -96,7 +96,7 @@ npm run worker
 npm start -- mock on
 ```
 
-Also check that `.env` says `MOCK_MODE=true` until 25 November.
+Also check that `.env` says `MOCK_MODE=true` until your keys are in place.
 
 ## Going live
 
