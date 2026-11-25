@@ -17,7 +17,7 @@ export function createEvidenceApi(settings: Settings): EvidenceApi {
   ].filter(Boolean);
   if (missing.length) throw new Error(`Live mode needs ${missing.join(" and ")} in .env`);
   if (!/\/v1$/.test(settings.evidenceBaseUrl)) {
-    throw new Error("DELPHI_EVIDENCE_BASE_URL must end with /v1, e.g. https://<delphi app domain>/v1");
+    throw new Error("DELPHI_EVIDENCE_BASE_URL must end with /v1 (the competition uses https://delphi.fyi/v1)");
   }
   return new EvidenceClient({
     baseUrl: settings.evidenceBaseUrl,

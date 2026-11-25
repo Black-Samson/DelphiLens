@@ -30,6 +30,14 @@ describe("config", () => {
     expect(headerSafe("   ", "fallback")).toBe("fallback");
   });
 
+  it("defaults to the live competition endpoints from the guide", () => {
+    const s = loadSettings({ MOCK_MODE: "false" });
+    expect(s.evidenceBaseUrl).toBe("https://delphi.fyi/v1");
+    expect(s.marketsSource).toBe("url");
+    expect(s.marketsUrl).toBe("https://competition.delphi.fyi/markets.json");
+    expect(loadSettings({ DELPHI_EVIDENCE_BASE_URL: "https://x/v1/" }).evidenceBaseUrl).toBe("https://x/v1");
+  });
+
   it("accepts the SDK key name and the older one", () => {
     expect(loadSettings({ DELPHI_API_ACCESS_KEY: "a" }).delphiApiKey).toBe("a");
     expect(loadSettings({ DELPHI_API_KEY: "b" }).delphiApiKey).toBe("b");

@@ -11,6 +11,7 @@ describe("evidence client factory", () => {
 
   it("needs a key and a /v1 base url in live mode", () => {
     expect(() => createEvidenceApi(loadSettings({ MOCK_MODE: "false" }))).toThrow(/DELPHI_API_ACCESS_KEY/);
+    expect(createEvidenceApi(loadSettings({ MOCK_MODE: "false", DELPHI_API_ACCESS_KEY: "k" }))).toBeDefined();
     expect(() =>
       createEvidenceApi(
         loadSettings({ MOCK_MODE: "false", DELPHI_API_ACCESS_KEY: "k", DELPHI_EVIDENCE_BASE_URL: "https://x" }),

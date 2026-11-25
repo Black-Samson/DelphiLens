@@ -9,6 +9,11 @@ export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 
 export type MarketsSource = "mock" | "sdk" | "url";
 
+/** Published in the competition guide (competition.delphi.fyi/participate). */
+export const DELPHI_EVIDENCE_BASE_URL = "https://delphi.fyi/v1";
+export const COMPETITION_MARKETS_URL = "https://competition.delphi.fyi/markets.json";
+export const FEEDBACK_URL = "https://feedback.delphi.fyi/v1/feedback";
+
 export interface Settings {
   agentId: string;
   agentHarness: string;
@@ -16,6 +21,8 @@ export interface Settings {
   mockMode: boolean;
   autoSubmit: boolean;
   delphiApiKey: string;
+  /** The wallet the API key was created with. Needed only to send feedback. */
+  delphiWallet: string;
   delphiNetwork: string;
   evidenceBaseUrl: string;
   marketsSource: MarketsSource;
@@ -59,7 +66,7 @@ export function loadSettings(env: Env = process.env): Settings {
     throw new Error(`AGENT_ID is locked to "${AGENT_ID}", got "${agentId}"`);
   }
   const mockMode = flag(env.MOCK_MODE, true);
-  const source = (env.MARKETS_SOURCE?.trim() || "sdk") as MarketsSource;
+  const source = (env.MARKETS_SOURCE?.trim() || "url") as MarketsSource;
   if (!["mock", "sdk", "url"].includes(source)) {
     throw new Error(`MARKETS_SOURCE must be mock, sdk or url, got "${source}"`);
   }
@@ -70,11 +77,12 @@ export function loadSettings(env: Env = process.env): Settings {
     agentModel: headerSafe(env.AGENT_MODEL || env.LLM_MODEL || "", "unknown"),
     mockMode,
     autoSubmit: flag(env.AUTO_SUBMIT, false),
-    delphiApiKey: env.DELPHI_API_ACCESS_KEY ?? env.DELPHI_API_KEY ?? "",
-    delphiNetwork: env.DELPHI_NETWORK?.trim() || "competition-testnet",
-    evidenceBaseUrl: (env.DELPHI_EVIDENCE_BASE_URL ?? "").trim().replace(/\/+$/, ""),
+    delphiApiKey: (env.DELPHI_API_ACCESS_KEY || env.DELPHI_API_KEY || "").trim(),
+    delphiWallet: (env.DELPHI_WALLET ?? "").trim(),
+    delphiNetwork: env.DELPHI_NETWORK?.trim() || "mainnet",
+    evidenceBaseUrl: (env.DELPHI_EVIDENCE_BASE_URL?.trim() || DELPHI_EVIDENCE_BASE_URL).replace(/\/+$/, ""),
     marketsSource: mockMode ? "mock" : source,
-    marketsUrl: env.MARKETS_URL?.trim() ?? "",
+    marketsUrl: env.MARKETS_URL?.trim() || COMPETITION_MARKETS_URL,
     searchApiKey: env.SEARCH_API_KEY ?? "",
     llmBaseUrl: (env.LLM_BASE_URL?.trim() || "https://api.openai.com/v1").replace(/\/+$/, ""),
     llmApiKey: env.LLM_API_KEY ?? "",

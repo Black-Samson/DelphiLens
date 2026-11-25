@@ -30,7 +30,6 @@ describe("market sources", () => {
   });
 
   it("explains missing configuration", async () => {
-    await expect(fetchMarkets(loadSettings({ MOCK_MODE: "false", MARKETS_SOURCE: "url" }))).rejects.toThrow(/MARKETS_URL/);
     await expect(fetchMarkets(loadSettings({ MOCK_MODE: "false", MARKETS_SOURCE: "sdk" }))).rejects.toThrow(/DELPHI_API_ACCESS_KEY/);
   });
 });
