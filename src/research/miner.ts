@@ -73,29 +73,68 @@ export interface MiningOutcome {
 }
 
 /** Search every query, drop paywalls and duplicates, keep fresh or undated results, rank them. */
-export async function findCandidates(market: MarketInfo, deps: MinerDeps, limit = 10): Promise<SearchResult[]> {
+export interface SearchStats {
+  queries: number;
+  failed: number;
+  firstError: string | null;
+  results: number;
+  paywalled: number;
+  tooOld: number;
+  kept: number;
+}
+
+/** Search every planned query, drop paywalls and duplicates, keep fresh or undated results, rank them. */
+export async function findCandidates(
+  market: MarketInfo,
+  deps: MinerDeps,
+  limit = 10,
+  stats?: SearchStats,
+): Promise<SearchResult[]> {
   const now = deps.now?.() ?? new Date();
   const seen = new Set<string>();
   const merged: SearchResult[] = [];
+  const st: SearchStats = stats ?? { queries: 0, failed: 0, firstError: null, results: 0, paywalled: 0, tooOld: 0, kept: 0 };
   const opened = marketOpenedAt(market.resolutionCriteria);
   for (const { query, domains } of await fullSearchPlan(deps.llm, market, deps.onIssue)) {
+    st.queries++;
     let results: SearchResult[];
     try {
       results = await deps.search.search(query, undefined, domains ? { domains } : undefined);
     } catch (err) {
+      st.failed++;
+      st.firstError ??= (err as Error).message;
       deps.onIssue?.("search_error", (err as Error).message, { query });
       continue;
     }
     for (const result of results) {
       const key = normalizeUrl(result.url);
-      if (seen.has(key) || isPaywalled(result.url)) continue;
+      if (seen.has(key)) continue;
       seen.add(key);
+      st.results++;
+      if (isPaywalled(result.url)) {
+        st.paywalled++;
+        continue;
+      }
       // Undated results stay for now: the page itself may carry a date.
-      if (result.published && !isFresh(result.published, market.evidenceCutoff, deps.maxAgeDays, now, opened)) continue;
+      if (result.published && !isFresh(result.published, market.evidenceCutoff, deps.maxAgeDays, now, opened)) {
+        st.tooOld++;
+        continue;
+      }
       merged.push(result);
     }
   }
+  st.kept = merged.length;
   return rankResults(merged, dataSourceHosts(market)).slice(0, limit);
+}
+
+export function describeSearch(st: SearchStats, opened: string | null): string {
+  const parts = [`${st.queries} searches`];
+  if (st.failed) parts.push(`${st.failed} failed (${st.firstError})`);
+  parts.push(`${st.results} distinct results`);
+  if (st.paywalled) parts.push(`${st.paywalled} paywalled`);
+  if (st.tooOld) parts.push(`${st.tooOld} published before ${opened ? `the market opened (${opened.slice(0, 16).replace("T", " ")} UTC)` : "the freshness window"}`);
+  parts.push(`${st.kept} kept to check`);
+  return `Search: ${parts.join(", ")}`;
 }
 
 /** Find the best fresh evidence for one market and queue it as a draft. */
@@ -124,7 +163,10 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
     .all(market.marketId) as PriorNote[];
   const passing: { result: SearchResult; text: string; verification: Verification }[] = [];
 
-  for (const candidate of (await findCandidates(market, deps)).slice(0, MAX_EXAMINED)) {
+  const searchStats: SearchStats = { queries: 0, failed: 0, firstError: null, results: 0, paywalled: 0, tooOld: 0, kept: 0 };
+  const candidates = await findCandidates(market, deps, 10, searchStats);
+  outcome.log.push(describeSearch(searchStats, marketOpenedAt(market.resolutionCriteria)));
+  for (const candidate of candidates.slice(0, MAX_EXAMINED)) {
     if (findDuplicates(db, [candidate.url], "").length) {
       outcome.log.push(`Already used: ${candidate.url}`);
       continue;

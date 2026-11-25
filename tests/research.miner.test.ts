@@ -40,6 +40,14 @@ describe("candidate search", () => {
     expect(found[0].url).toMatch(/\.gov\//);
   });
 
+  it("reports a search summary in the mining log", async () => {
+    const { db, deps } = setup();
+    deps.search = { search: async () => Promise.reject(new Error("Could not reach Tavily search: connection timed out")) };
+    const out = await mineMarket(db, market, deps);
+    expect(out.status).toBe("no_evidence");
+    expect(out.log[0]).toMatch(/^Search: \d+ searches, \d+ failed \(Could not reach Tavily search: connection timed out\), 0 distinct results, 0 kept to check$/);
+  });
+
   it("logs a failing search provider and carries on", async () => {
     const { deps } = setup();
     const issues: string[] = [];
