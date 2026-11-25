@@ -21,25 +21,39 @@ export class OpenAICompatibleLLM implements LLMProvider {
     private readonly fetchFn: typeof fetch = fetch,
   ) {}
 
+  /** Some free providers reject JSON mode; after one refusal, ask for plain text (replies are parsed leniently). */
+  private jsonMode = true;
+
   async complete(system: string, prompt: string): Promise<string> {
-    const res = await this.fetchFn(`${this.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.apiKey}` },
-      body: JSON.stringify({
-        model: this.model,
-        temperature: 0,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: prompt },
-        ],
-      }),
-    });
+    let res = await this.request(system, prompt);
+    if (res.status === 400 && this.jsonMode) {
+      const detail = await res.clone().text();
+      if (/response_format|json/i.test(detail)) {
+        this.jsonMode = false;
+        res = await this.request(system, prompt);
+      }
+    }
     if (!res.ok) throw new Error(`LLM returned HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const content = body.choices?.[0]?.message?.content;
     if (!content) throw new Error("LLM reply had no content");
     return content;
+  }
+
+  private request(system: string, prompt: string): Promise<Response> {
+    return this.fetchFn(`${this.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.apiKey}` },
+      body: JSON.stringify({
+        model: this.model,
+        temperature: 0,
+        ...(this.jsonMode ? { response_format: { type: "json_object" } } : {}),
+        messages: [
+          { role: "system", content: `${system} Reply with JSON only.` },
+          { role: "user", content: prompt },
+        ],
+      }),
+    });
   }
 }
 
