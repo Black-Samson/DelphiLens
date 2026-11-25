@@ -45,13 +45,41 @@ function hasOpenDraft(app: App, marketId: string): boolean {
   return Boolean(app.db.prepare("SELECT 1 FROM submissions WHERE market_id = ? AND status = 'draft'").get(marketId));
 }
 
+/** Can this account still submit on the market? Checked before spending research on it. */
+export async function canEnter(app: App, marketId: string): Promise<{ ok: boolean; reason: string }> {
+  try {
+    const { data } = await app.evidence.getEntryState(marketId);
+    if (!data.canSubmit || data.remainingOnMarket <= 0) return { ok: false, reason: data.reason ?? "no slots left" };
+    return { ok: true, reason: `${data.remainingOnMarket} slot(s) left` };
+  } catch (err) {
+    app.report("api_error", `Entry state failed: ${(err as Error).message}`, { market: marketId });
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+/** Submissions left this UTC hour, or null if Delphi could not say. */
+export async function submitsLeftThisHour(app: App): Promise<number | null> {
+  try {
+    return (await app.evidence.getLimits()).data.submitsLeftThisHour;
+  } catch (err) {
+    app.report("api_error", `Limits check failed: ${(err as Error).message}`);
+    return null;
+  }
+}
+
 export async function submitPendingDrafts(app: App, log: (l: string) => void = () => {}): Promise<number> {
   const drafts = app.db.prepare("SELECT id, market_id FROM submissions WHERE status = 'draft' ORDER BY id").all() as {
     id: number;
     market_id: string;
   }[];
+  if (!drafts.length) return 0;
+  const left = await submitsLeftThisHour(app);
+  if (left === 0) {
+    log("No submissions left this hour; drafts wait for the next hour");
+    return 0;
+  }
   let sent = 0;
-  for (const d of drafts) {
+  for (const d of drafts.slice(0, left ?? drafts.length)) {
     try {
       await submitDraft(app.db, app.evidence, d.id, app.report);
       sent++;
@@ -89,7 +117,15 @@ export async function runCycle(app: App, opts: CycleOptions = {}): Promise<Cycle
       .filter((m) => !hasOpenDraft(app, m.marketId))
       .sort((a, b) => Number(fresh.has(b.marketId)) - Number(fresh.has(a.marketId)));
     if (fresh.size) log(`New markets first: ${fresh.size}`);
-    for (const market of ranked.slice(0, opts.maxMarkets ?? 3)) {
+    let mined = 0;
+    for (const market of ranked) {
+      if (mined >= (opts.maxMarkets ?? 3)) break;
+      const entry = await canEnter(app, market.marketId);
+      if (!entry.ok) {
+        log(`Skipped "${market.question}": ${entry.reason}`);
+        continue;
+      }
+      mined++;
       const outcome = await mineMarket(app.db, getMarket(app.db, market.marketId) ?? market, minerDeps(app));
       log(`Mined "${market.question}": ${outcome.status}${outcome.stance ? ` (${outcome.stance})` : ""}`);
       if (outcome.status === "draft_created") summary.drafts++;

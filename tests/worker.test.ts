@@ -4,7 +4,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import { computeStats } from "../src/stats";
-import { checkForNewMarkets, newUnminedMarkets, runCycle } from "../src/worker";
+import { checkForNewMarkets, newUnminedMarkets, runCycle, submitPendingDrafts } from "../src/worker";
+import { vi } from "vitest";
 import { saveMarkets } from "../src/markets/store";
 import { sampleMarkets } from "../src/markets/mock";
 
@@ -76,5 +77,37 @@ describe("new markets", () => {
     expect(lines[0]).toMatch(/new market\(s\) opened/);
     expect(await checkForNewMarkets(() => { throw new Error("offline"); }, (l) => lines.push(l))).toBe(0);
     expect(lines.at(-1)).toMatch(/offline/);
+  });
+});
+
+describe("Delphi's limits", () => {
+  it("skips markets Delphi will not accept more evidence on", async () => {
+    const a = app(false);
+    vi.spyOn(a.evidence, "getEntryState").mockImplementation(async (market: string) => ({
+      data: {
+        canSubmit: market.endsWith("1"),
+        reason: market.endsWith("1") ? undefined : "cap_reached",
+        remainingOnMarket: market.endsWith("1") ? 3 : 0,
+        judgementPotRemainingBaseUnits: "0",
+        rateLimit: { resetAt: "" },
+      },
+      meta: {},
+    }));
+    const lines: string[] = [];
+    const s = await runCycle(a, { sendDigest: false, maxMarkets: 3, log: (l) => lines.push(l) });
+    expect(s.drafts).toBe(1);
+    expect(lines.join("\n")).toMatch(/Skipped .*cap_reached/);
+  });
+
+  it("holds drafts when no submissions are left this hour", async () => {
+    const a = app(false);
+    await runCycle(a, { sendDigest: false, maxMarkets: 2 });
+    vi.spyOn(a.evidence, "getLimits").mockResolvedValue({
+      data: { submitsLeftThisHour: 0, hourEndsAt: "", dailyCapLeft: 1, dailyCapResetAt: "" },
+      meta: {},
+    });
+    const lines: string[] = [];
+    expect(await submitPendingDrafts(a, (l) => lines.push(l))).toBe(0);
+    expect(lines[0]).toMatch(/No submissions left this hour/);
   });
 });
