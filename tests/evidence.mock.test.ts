@@ -28,6 +28,9 @@ describe("mock evidence api", () => {
   it("rejects bad input like the real API", async () => {
     const api = new MockEvidenceApi(0);
     await expect(api.submitEvidence({ note: "x" })).rejects.toThrow(/marketAddress/);
+    await expect(
+      api.submitEvidence({ ...params, links: ["https://a.gov/1", "https://a.gov/2", "https://a.gov/3"] }),
+    ).rejects.toThrow(/at most 3 items/);
     await expect(api.getSubmission("nonsense")).rejects.toThrow(/Unknown/);
   });
 

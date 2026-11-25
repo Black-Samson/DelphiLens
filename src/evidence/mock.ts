@@ -37,7 +37,9 @@ export class MockEvidenceApi implements EvidenceApi {
 
   async submitEvidence(p: SubmitEvidenceParams): Promise<EvidenceResult<Submission>> {
     if (!p.marketAddress) throw new Error("marketAddress is required");
-    if ((p.files?.length ?? 0) > 3) throw new Error("Up to 3 files");
+    const items = (p.note ? 1 : 0) + (p.links?.length ?? 0) + (p.files?.length ?? 0);
+    if (items === 0) throw new Error("invalid_request: send a note, links or files");
+    if (items > 3) throw new Error("invalid_request: at most 3 items in all (the note is 1, each link and file is 1)");
     const digest = createHash("sha256")
       .update(`${p.note}|${(p.links ?? []).join("|")}`)
       .digest("hex")
