@@ -80,7 +80,12 @@ async function main(argv: string[]): Promise<void> {
         break;
       }
       case "mine": {
-        syncMarkets(app.db, await fetchMarkets(app.settings));
+        try {
+          syncMarkets(app.db, await fetchMarkets(app.settings));
+        } catch (err) {
+          // Mining can still use the markets saved from the last successful refresh.
+          console.log(`Warning: market list not refreshed (${(err as Error).message}). Using saved markets.`);
+        }
         const market = args[0] ? getMarket(app.db, args[0]) : listMarkets(app.db)[0];
         if (!market) throw new Error(`Unknown market ${args[0]}`);
         const out = await mineMarket(app.db, market, minerDeps(app));
