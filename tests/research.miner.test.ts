@@ -50,13 +50,13 @@ describe("candidate search", () => {
 });
 
 describe("mineMarket", () => {
-  it("creates a YES draft with up to 3 links and snapshots", async () => {
+  it("creates a YES draft with at most 2 links (3 items with the note) and snapshots", async () => {
     const { db, deps } = setup();
     const out = await mineMarket(db, market, deps);
     expect(out.status).toBe("draft_created");
     expect(out.stance).toBe("YES");
     expect(out.links.length).toBeGreaterThan(0);
-    expect(out.links.length).toBeLessThanOrEqual(3);
+    expect(out.links.length).toBeLessThanOrEqual(2);
     expect(out.files.every((f) => fs.existsSync(f))).toBe(true);
     expect(out.links.some((l) => l.includes("localnews"))).toBe(false);
     expect(out.note).toMatch(/\n\nSources:\n1\. "The agency confirmed the measure/);

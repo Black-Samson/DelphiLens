@@ -47,12 +47,18 @@ describe("guardrails", () => {
     createDraft(db, draft(4, "M2"));
   });
 
-  it("allows at most 3 files per submission", () => {
+  it("keeps a submission to 3 items: the note plus at most 2 links", () => {
     const db = testDb();
-    const three = checkSubmission(db, { ...draft(1), files: ["a", "b", "c"] });
-    const four = checkSubmission(db, { ...draft(1), files: ["a", "b", "c", "d"] });
-    expect(three).toEqual([]);
-    expect(four.join()).toMatch(/Max 3 files/);
+    const two = checkSubmission(db, { ...draft(1), links: ["https://a.gov/1", "https://a.gov/2"] });
+    const three = checkSubmission(db, { ...draft(1), links: ["https://a.gov/1", "https://a.gov/2", "https://a.gov/3"] });
+    expect(two).toEqual([]);
+    expect(three.join()).toMatch(/Max 3 items per submission \(the note counts as one\), got 4/);
+  });
+
+  it("keeps at most 3 local snapshots per draft", () => {
+    const db = testDb();
+    expect(checkSubmission(db, { ...draft(1), files: ["a", "b", "c"] })).toEqual([]);
+    expect(checkSubmission(db, { ...draft(1), files: ["a", "b", "c", "d"] }).join()).toMatch(/Max 3 snapshots/);
   });
 
   it("blocks a reused link, even with tracking params, across markets", () => {

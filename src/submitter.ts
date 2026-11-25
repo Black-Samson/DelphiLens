@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { EvidenceApiError, TermsNotAcceptedError } from "@gensyn-ai/gensyn-delphi-sdk";
 import type { DB } from "./db";
@@ -36,12 +34,6 @@ export function getSubmissionRow(db: DB, id: number): SubmissionRow {
   const row = db.prepare("SELECT * FROM submissions WHERE id = ?").get(id) as SubmissionRow | undefined;
   if (!row) throw new Error(`No submission with id ${id}`);
   return row;
-}
-
-function toFiles(paths: string[]): File[] {
-  return paths
-    .filter((p) => fs.existsSync(p))
-    .map((p) => new File([fs.readFileSync(p)], path.basename(p), { type: "text/plain" }));
 }
 
 /** Store what Delphi reports about a submission: status, verdict, rationale and reward. */
@@ -93,8 +85,9 @@ export async function submitDraft(db: DB, api: EvidenceApi, id: number, report?:
     sub = (
       await api.submitEvidence({
         note: row.note,
+        // Note + links already fill Delphi's 3-item limit. The judge fetches the links itself,
+        // and the key text is quoted in the note, so local snapshots stay local.
         links,
-        files: toFiles(JSON.parse(row.files)),
         marketAddress: row.market_id,
         idempotencyKey: key,
       })

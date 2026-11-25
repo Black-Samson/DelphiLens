@@ -2,7 +2,12 @@ import type { DB } from "./db";
 import { hashText, hashUrl } from "./hashing";
 
 export const MAX_SUBMISSIONS_PER_MARKET = 3;
+/** Local markdown snapshots kept per draft for your review (they are not uploaded). */
 export const MAX_FILES_PER_SUBMISSION = 3;
+/** Delphi counts the note, each link and each uploaded file as one item, 3 at most. */
+export const MAX_ITEMS_PER_SUBMISSION = 3;
+/** So a note can carry at most 2 sources. */
+export const MAX_SOURCES_PER_SUBMISSION = MAX_ITEMS_PER_SUBMISSION - 1;
 export const QUALIFY_JUDGED = 10;
 export const QUALIFY_MARKETS = 3;
 
@@ -92,7 +97,11 @@ export function checkSubmission(db: DB, input: DraftInput): string[] {
     reasons.push(`Max ${MAX_SUBMISSIONS_PER_MARKET} submissions per market`);
   }
   if ((input.files?.length ?? 0) > MAX_FILES_PER_SUBMISSION) {
-    reasons.push(`Max ${MAX_FILES_PER_SUBMISSION} files per submission`);
+    reasons.push(`Max ${MAX_FILES_PER_SUBMISSION} snapshots per draft`);
+  }
+  const items = (input.note.trim() ? 1 : 0) + input.links.length;
+  if (items > MAX_ITEMS_PER_SUBMISSION) {
+    reasons.push(`Max ${MAX_ITEMS_PER_SUBMISSION} items per submission (the note counts as one), got ${items}`);
   }
   if (!input.note.trim()) reasons.push("Evidence note cannot be empty");
   if (input.links.length === 0) reasons.push("At least one dated source link is required");

@@ -24,7 +24,7 @@ function setup(judgeDelayMs = 0) {
 }
 
 describe("submitter", () => {
-  it("submits a draft with its files and locks the stance", async () => {
+  it("submits the note and links (no snapshot uploads) and locks the stance", async () => {
     const { db, id, api } = setup(60_000);
     const spy = vi.spyOn(api, "submitEvidence");
     const row = await submitDraft(db, api, id);
@@ -34,7 +34,7 @@ describe("submitter", () => {
     expect(getLockedStance(db, "0xabc")).toBe("NO");
     const params = spy.mock.calls[0][0];
     expect(params).toMatchObject({ marketAddress: "0xabc", links: ["https://a.gov/r/1"], idempotencyKey: row.idempotency_key });
-    expect(params.files?.[0]).toBeInstanceOf(File);
+    expect(params.files).toBeUndefined();
     await expect(submitDraft(db, api, id)).rejects.toThrow(/not a draft/);
   });
 

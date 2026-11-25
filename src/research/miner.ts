@@ -1,7 +1,7 @@
 import type { DB } from "../db";
 import {
   GuardrailError,
-  MAX_FILES_PER_SUBMISSION,
+  MAX_SOURCES_PER_SUBMISSION,
   MAX_SUBMISSIONS_PER_MARKET,
   countSubmissions,
   createDraft,
@@ -178,7 +178,7 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
   // Primary sources were ranked first; within the chosen side keep the order, then the most confident.
   const accepted = passing
     .filter((p) => stance && p.verification.stance === stance)
-    .slice(0, MAX_FILES_PER_SUBMISSION);
+    .slice(0, MAX_SOURCES_PER_SUBMISSION);
   if (!accepted.length || !stance) return outcome;
 
   let brief: string;
