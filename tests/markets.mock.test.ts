@@ -4,10 +4,11 @@ import { sampleMarkets } from "../src/markets/mock";
 describe("sample markets", () => {
   const markets = sampleMarkets(new Date("2026-11-23T17:00:00Z"));
 
-  it("covers politics, crypto, economics, technology and sports", () => {
+  it("covers every competition category and lists data sources", () => {
     expect(new Set(markets.map((m) => m.category))).toEqual(
-      new Set(["politics", "crypto", "economics", "technology", "sports"]),
+      new Set(["votes_government", "local_language", "official_statistics", "releases_standards", "niche_communities", "controls"]),
     );
+    expect(markets.every((m) => (m.dataSources ?? []).length > 0 && m.resolutionCriteria)).toBe(true);
   });
 
   it("uses unique address-like ids and sane odds and times", () => {
