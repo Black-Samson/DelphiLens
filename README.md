@@ -1,6 +1,6 @@
 # DelphiLens
 
-**A primary-source evidence miner for the [Delphi Agent Arena: Evidence Mining](https://agent-competition.gensyn.ai) competition, built on the official [Gensyn Delphi SDK](https://github.com/gensyn-ai/gensyn-delphi-sdk).**
+**A primary-source evidence miner for the [Delphi Agent Competition: Evidence Mining](https://competition.delphi.fyi/participate), built on the official [Gensyn Delphi SDK](https://github.com/gensyn-ai/gensyn-delphi-sdk).**
 
 DelphiLens reads the competition's prediction markets and searches for fresh, dated facts from primary sources. It checks each fact with an LLM and writes a short objective note, then submits it to Delphi through the SDK's `EvidenceClient`. It follows the competition rules on its own: one direction per market, max 3 submissions, no repeats, public sources only. Everything runs locally, with a command center dashboard and a daily digest.
 
@@ -12,7 +12,7 @@ DelphiLens reads the competition's prediction markets and searches for fresh, da
 
 ```mermaid
 flowchart LR
-    A[Competition markets<br/>markets.json or SDK] --> B[Prioritizer<br/>contested, untouched, big pots]
+    A[Competition markets<br/>competition.delphi.fyi/markets.json] --> B[Prioritizer<br/>new, contested, entry state]
     B --> C[Researcher<br/>queries, search, date filter]
     C --> D[Fetcher<br/>robots.txt, clean text, snapshots]
     D --> E[LLM verifier<br/>public, verifiable, moves odds]
@@ -26,13 +26,13 @@ flowchart LR
 ```
 
 1. **Pick markets.** Until you qualify (10 judged submissions across 3 markets), DelphiLens spreads across untouched markets first. After that it favors contested markets (20% to 80%) with the biggest reward pots.
-2. **Mine.** Each question becomes targeted queries for official releases, filings, commits, statistics and local news. Paywalled, stale and post-cutoff results are dropped, and primary sources rank first.
+2. **Mine.** Searches start with the market's own listed data sources (statistics offices, election sites, release pages). Then come template queries and AI-written queries, including some in the local language. Paywalled results, results dated before the market opened, and results after the cutoff are dropped. Primary sources rank first.
 3. **Verify.** An LLM checks that each fact is public, verifiable and likely to move the forecaster, gives its direction (YES or NO), and picks the sentence that states it. That sentence is only kept if it appears word for word in the source.
 4. **Skip repeats.** Delphi counts facts, not links, so each fact is compared with everything already drafted or sent on the market. A reworded or re-sourced repeat is dropped.
 5. **Choose a side.** All passing evidence is weighed before committing. One side must clearly outweigh the other (by 1.5x), otherwise the market is left alone, because the settlement reward only pays when the evidence pointed toward the real outcome.
 6. **Write the note.** One 2 to 3 sentence summary is written from all the chosen sources. The judge only reads what is submitted, so each source's key sentence is quoted underneath it with its publisher, date and link.
-7. **Guard.** The stance lock, the 3-submission cap, the 3-file cap and the duplicate blocker run locally. Before sending, Delphi's own `getEntryState` and `listSubmissions` are checked too.
-8. **Submit and track.** Drafts are sent with the source links and up to 3 markdown snapshots. Verdicts, rationales and rewards are polled and stored.
+7. **Guard.** The stance lock, the 3-submission cap, the 3-item cap (note plus at most 2 links) and the duplicate blocker run locally. Delphi's own entry state, hourly limit and earlier submissions are checked too.
+8. **Submit and track.** Drafts are sent as the note plus its links. Markdown snapshots stay on your machine for review. Verdicts, rationales and rewards are polled and stored.
 
 ## Features
 
@@ -49,7 +49,8 @@ flowchart LR
 | **Research** | Tavily news search, OpenAI-compatible LLM (OpenAI, OpenRouter, Groq, Gemini...), robots.txt-aware fetching |
 | **Dashboard** | Overview, Live markets (Mine Now), Review & receipts, Newsletter & feedback, in the Sack of Chaos palette with dark and light modes |
 | **Digest** | Daily markdown and HTML briefing in `reports/`, optionally sent by Discord webhook or email |
-| **Feedback log** | API errors, rate limits, ambiguous markets and tool limits, exported for the feedback bounties |
+| **Feedback log** | API errors, rate limits, ambiguous markets and tool limits, exported and sent to Delphi's feedback API when you choose |
+| **Doctor** | `npm start -- doctor` runs the guide's entry checks: key, terms, markets, limits |
 
 ## Quick start (Ubuntu / WSL)
 
@@ -97,9 +98,9 @@ npm start -- mock on
 
 Also check that `.env` says `MOCK_MODE=true` until 25 November.
 
-## Going live on 25 November
+## Going live
 
-See **[docs/GO_LIVE.md](docs/GO_LIVE.md)**. In short: add your Delphi API key, set the evidence base URL and market list from the agent guide, read and accept the evidence terms, and set `MOCK_MODE=false`.
+See **[docs/GO_LIVE.md](docs/GO_LIVE.md)**. In short: add your Mainnet Delphi API key and keys for research, run `npm start -- mock off` and `npm start -- doctor`, read and accept the terms, then make a first submission by hand from the dashboard.
 
 ## Commands
 
@@ -107,6 +108,7 @@ See **[docs/GO_LIVE.md](docs/GO_LIVE.md)**. In short: add your Delphi API key, s
 | --- | --- |
 | `npm run dashboard` | Command center at http://localhost:8501 |
 | `npm run worker` | Background loop: refresh markets, mine, submit (if auto), poll, daily digest |
+| `npm start -- doctor` | Check the API key, terms, markets and limits |
 | `npm start -- status` | Mode, qualification progress, earnings |
 | `npm start -- markets` | Refresh and list open markets |
 | `npm start -- mine [marketId]` | Mine evidence for the best market, or the one given |
@@ -114,7 +116,7 @@ See **[docs/GO_LIVE.md](docs/GO_LIVE.md)**. In short: add your Delphi API key, s
 | `npm start -- approve <id>` / `discard <id>` | Submit or throw away a draft |
 | `npm start -- poll` | Check verdicts and rewards |
 | `npm start -- digest [--send]` | Write today's digest, and optionally send it |
-| `npm start -- feedback` | Export `reports/feedback_bounty_notes.md` |
+| `npm start -- feedback [--send <id>]` | List and export logged issues, or send one to Delphi |
 | `npm start -- terms [--accept <v>]` | Show the evidence terms, or accept a version you have read |
 | `npm start -- mock on` / `mock off` | Switch mock mode (overrides `MOCK_MODE` in `.env`) |
 | `npm run check` | Lint, type-check and run all tests |
@@ -131,9 +133,10 @@ All settings live in `.env`. `.env.example` documents every one.
 | `AGENT_HARNESS`, `AGENT_MODEL` | Sent as `X-Agent-Harness` and `X-Agent-Model` |
 | `MOCK_MODE` | `true` runs offline; `false` uses the real Delphi API |
 | `AUTO_SUBMIT` | `false` queues drafts for your approval |
-| `DELPHI_API_ACCESS_KEY` | Your Delphi API key (from 25 November) |
-| `DELPHI_EVIDENCE_BASE_URL` | Evidence API base URL, ending in `/v1` |
-| `MARKETS_SOURCE`, `MARKETS_URL` | `url` for the competition `markets.json`, or `sdk` |
+| `DELPHI_API_ACCESS_KEY` | Your Mainnet Delphi API key from api-access.delphi.fyi |
+| `DELPHI_WALLET` | Wallet on your Delphi profile, used to send feedback |
+| `DELPHI_EVIDENCE_BASE_URL` | Defaults to `https://delphi.fyi/v1` |
+| `MARKETS_SOURCE`, `MARKETS_URL` | Default to `url` and `https://competition.delphi.fyi/markets.json` |
 | `SEARCH_API_KEY` | Tavily key |
 | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | Any OpenAI-compatible chat API |
 | `MAX_SOURCE_AGE_DAYS` | Freshness window for sources (default 14) |
@@ -178,7 +181,7 @@ The suite covers the stance lock, the duplicate blocker, the 3-submission and 3-
 ## Competition rules DelphiLens respects
 
 - **One direction per market.** Evidence for both sides cancels out, so after the first draft the market is locked to that stance.
-- **Up to 3 submissions per market, up to 3 files each.**
+- **Up to 3 submissions per market, 3 items each.** The note counts as one item, so a note carries at most 2 links.
 - **No repeats.** Repeated evidence earns nothing. Links and claims are hashed, and your account's earlier submissions are checked before sending.
 - **Public information only.** Known paywalls are skipped, robots.txt is respected, and the LLM rejects private, leaked or personal data.
 - **Real evidence only.** Notes are written from the fetched source text, and live mode cannot use mock research.

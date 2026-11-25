@@ -1,53 +1,94 @@
-# Go-live checklist (November 25)
+# Going live
 
-The competition opens on 25 November at 17:00 UTC, which is 18:00 in Lagos. Until then DelphiLens runs in mock mode. These are the steps to switch it to the real Delphi API.
+The competition runs from 25 November 2026, 17:00 UTC, to 11 December 2026, 17:00 UTC. The official guide is at https://competition.delphi.fyi/participate, and the version for agents is at https://competition.delphi.fyi/skill.md.
 
-## Before the 25th
+## 1. Register (once)
 
-- [ ] Delphi account created; main wallet address noted.
-- [ ] Registered on DoraHacks with that wallet and the agent name **DelphiLens**.
-- [ ] `SEARCH_API_KEY` (Tavily) and `LLM_API_KEY` set in `.env`. Mock mode can already use them, so you can check research quality on the sample markets.
-- [ ] `npm run check` passes.
+- Sign in to Delphi (https://app.delphi.fyi) at least once. That creates your account and wallet.
+- Register on DoraHacks with **the wallet shown on your Delphi profile** and the display name **DelphiLens**: https://dorahacks.io/hackathon/delphi-agent-competition2/detail
+- Access syncs once an hour, so wait up to an hour after registering.
 
-## On the 25th
+## 2. Fill in `.env`
 
-1. **Get the API key.** Use the Delphi API key page linked from the competition site (testnet keys: https://delphi-api-access.gensyn.ai/). Put it in `.env`:
+```bash
+nano .env
+```
 
-       DELPHI_API_ACCESS_KEY=...
+| Setting | Value |
+| --- | --- |
+| `DELPHI_API_ACCESS_KEY` | A **Mainnet** key from https://api-access.delphi.fyi, signed in the same way you sign in to Delphi. Never share it. |
+| `DELPHI_WALLET` | The wallet on your Delphi profile (`0x...`). Only used to send feedback. |
+| `SEARCH_API_KEY` | Tavily key (https://tavily.com) |
+| `LLM_API_KEY`, `LLM_MODEL` | Your AI provider key and model |
+| `AGENT_MODEL` | The model name to show on results, e.g. `gpt-4o-mini` |
+| `AUTO_SUBMIT` | Keep `false` until you trust the drafts |
 
-2. **Read the agent guide.** Copy two values from it into `.env`:
+You can leave `DELPHI_EVIDENCE_BASE_URL` and `MARKETS_URL` alone. They already default to `https://delphi.fyi/v1` and `https://competition.delphi.fyi/markets.json`.
 
-       DELPHI_EVIDENCE_BASE_URL=https://<delphi app domain>/v1
-       MARKETS_URL=https://.../markets.json     # and set MARKETS_SOURCE=url
+## 3. Switch to live mode and run the checks
 
-   If the guide says to read markets through the SDK instead, keep `MARKETS_SOURCE=sdk`.
+```bash
+npm start -- mock off
+npm start -- doctor
+```
 
-3. **Set the model header.** Put the model you use in `AGENT_MODEL`, for example `gpt-4o-mini`, so results show under the right harness and model.
+`doctor` runs the same checks as the official guide:
 
-4. **Switch off mock mode.** Set `MOCK_MODE=false`, or untick *Mock mode* in the dashboard. DelphiLens refuses to start live mode without real search and LLM keys, so it can never send mock evidence.
+- **API key:** `GET /v1/limits`. A 401 means a wrong key or a Testnet key. A 404 means you aren't registered yet, or registered less than an hour ago.
+- **Terms:** `GET /v1/terms`.
+- **Markets:** the competition list.
+- **Feedback wallet:** whether `DELPHI_WALLET` is set.
 
-5. **Accept the evidence terms yourself.** Read them first:
+## 4. Accept the terms yourself
 
-       npm start -- terms                      # shows the version and the link
-       npm start -- terms --accept <version>   # only after you have read them
+Read them first. DelphiLens never accepts them for you.
 
-6. **Check the market list.**
+```bash
+npm start -- terms                      # shows the version and the link
+npm start -- terms --accept <version>   # only after you have read them
+```
 
-       npm start -- markets
+## 5. First submission by hand
 
-   If markets are missing fields (odds, cutoff or pot show as `?` or `0`), paste one entry from `markets.json` into the chat so the field list in `src/markets/normalize.ts` can be adjusted.
+```bash
+npm run dashboard
+```
 
-7. **Make the first submission by hand.** Open the dashboard (`npm run dashboard`), press **Mine now** on a contested market, read the draft, then press **Approve & submit**. The verdict usually arrives within minutes; press **Check verdicts now**.
+1. Open http://localhost:8501.
+2. In *Live markets*, press **Mine now** on a market.
+3. In *Review & receipts*, read the draft: the summary, the quoted sources and the links.
+4. If it's good, press **Approve & submit**. If not, press **Reject draft**.
+5. A few minutes later, press **Check verdicts now** to see the verdict, rationale and reward.
 
-8. **Then let the worker run.** Start `npm run worker` in a second terminal. Keep *Auto-submit* off until you trust the drafts.
+## 6. Let the worker run
+
+```bash
+npm run worker      # in a second terminal
+```
+
+It checks for new markets every 5 minutes, checks Delphi's entry state before researching a market, checks the hourly limit before submitting, and polls receipts. Leave *Auto-submit* off until you're happy with the drafts.
 
 ## Rules DelphiLens enforces for you
 
-| Competition rule | Where |
+| Competition rule | How |
 | --- | --- |
-| Max 3 submissions per market, max 3 files each | `src/guardrails.ts`, plus `getEntryState` before every submit |
-| Evidence for both sides of a market cancels out | Stance lock in `src/guardrails.ts` |
-| Repeated evidence earns nothing | Link and claim hashes locally, plus `listSubmissions` before every submit |
-| Public information only | Paywall list, robots.txt check, LLM public-access check |
-| 10 judged submissions across 3+ markets to qualify | Qualification tracker and market prioritizer |
-| Send ID, harness and model headers | `X-Agent-Id`, `X-Agent-Harness`, `X-Agent-Model` via the SDK |
+| Up to 3 submissions per market | Local count plus `GET /v1/markets/{market}/entry-state` before research and before submitting |
+| Up to 3 items per submission, and the note counts as one | Note plus at most 2 links; local snapshots are not uploaded |
+| Hourly submission limit | `GET /v1/limits` before each batch |
+| Both sides of a market cancel out | Stance lock, chosen only when one side clearly outweighs the other |
+| Facts public before the market opened are presumed priced | Sources dated before the market's start (from its resolution criteria) are dropped |
+| Repeats earn nothing ("it's the facts that count") | Link and claim hashes, an AI same-fact check, and `listSubmissions` before sending |
+| Public information only | Paywall list, robots.txt, and an AI public-access check |
+| Send `X-Agent-Id`, `X-Agent-Harness` and `X-Agent-Model` | Set on every Evidence API and feedback call |
+| Retry safely after a timeout | The Idempotency-Key is saved before sending and reused |
+
+## Feedback bounties (5 × $250)
+
+DelphiLens logs API errors, rate limits and tool problems automatically. You can add your own notes in the dashboard. To send one to Delphi:
+
+```bash
+npm start -- feedback               # list entries
+npm start -- feedback --send <id>   # send one (20 per day max)
+```
+
+Or press **Send to Delphi** next to an entry in the *Newsletter & feedback* tab. Nothing is sent without you choosing it.
