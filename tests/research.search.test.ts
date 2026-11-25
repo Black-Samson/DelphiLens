@@ -35,4 +35,20 @@ describe("search providers", () => {
     const fetchFn = async () => new Response("no", { status: 401 });
     await expect(new TavilySearchProvider("bad", 7, fetchFn as unknown as typeof fetch).search("q")).rejects.toThrow(/401/);
   });
+
+  it("restricts Tavily to official data sources with the general topic", async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ results: [] })));
+    await new TavilySearchProvider("key", 7, fetchFn as unknown as typeof fetch).search("German CPI", 5, {
+      domains: ["destatis.de"],
+    });
+    const [, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body).toMatchObject({ topic: "general", include_domains: ["destatis.de"] });
+    expect(body.days).toBeUndefined();
+  });
+
+  it("mock returns pages on the requested domains", async () => {
+    const results = await new MockSearchProvider(new Date("2026-11-24T00:00:00Z")).search("cpi", 5, { domains: ["destatis.de"] });
+    expect(results.map((r) => new URL(r.url).hostname)).toEqual(["destatis.de"]);
+  });
 });
