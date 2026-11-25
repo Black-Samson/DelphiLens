@@ -13,7 +13,8 @@ import { normalizeUrl } from "../hashing";
 import type { MarketInfo } from "../markets/types";
 import type { PageFetcher } from "./fetcher";
 import type { LLMProvider } from "./llm";
-import { dataSourceHosts, searchPlan } from "./queries";
+import { fullSearchPlan } from "./plan";
+import { dataSourceHosts } from "./queries";
 import type { SearchProvider, SearchResult } from "./search";
 import { saveSnapshots } from "./snapshots";
 import { isFresh, isPaywalled, marketOpenedAt, rankResults } from "./sources";
@@ -77,7 +78,7 @@ export async function findCandidates(market: MarketInfo, deps: MinerDeps, limit 
   const seen = new Set<string>();
   const merged: SearchResult[] = [];
   const opened = marketOpenedAt(market.resolutionCriteria);
-  for (const { query, domains } of searchPlan(market)) {
+  for (const { query, domains } of await fullSearchPlan(deps.llm, market, deps.onIssue)) {
     let results: SearchResult[];
     try {
       results = await deps.search.search(query, undefined, domains ? { domains } : undefined);

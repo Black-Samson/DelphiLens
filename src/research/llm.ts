@@ -67,6 +67,7 @@ export class MockLLM implements LLMProvider {
     if (prompt.startsWith("TASK: VERIFY")) return JSON.stringify(this.verify(prompt));
     if (prompt.startsWith("TASK: BRIEF")) return JSON.stringify(this.brief(prompt));
     if (prompt.startsWith("TASK: SAME_FACT")) return mockSameFact(prompt);
+    if (prompt.startsWith("TASK: QUERIES")) return JSON.stringify({ queries: [] });
     throw new Error("MockLLM got an unknown task");
   }
 
