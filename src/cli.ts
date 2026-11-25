@@ -1,5 +1,6 @@
 import { createApp, minerDeps } from "./app";
 import { deliverDigest } from "./delivery";
+import { formatChecks, runDoctor } from "./doctor";
 import { exportFeedbackReport } from "./feedback";
 import { discardDraft } from "./guardrails";
 import { loadSettings } from "./config";
@@ -14,6 +15,7 @@ import { runCycle, runWorker } from "./worker";
 
 const HELP = `DelphiLens commands (run with: npm start -- <command>)
 
+  doctor                 Check the API key, terms, markets and limits (run this first)
   status                 Mode, qualification progress and earnings
   markets                Refresh and list open competition markets
   mine [marketId]        Mine evidence (best market, or the one given)
@@ -55,6 +57,12 @@ async function main(argv: string[]): Promise<void> {
   const app = createApp();
   try {
     switch (command) {
+      case "doctor": {
+        const checks = await runDoctor(app);
+        console.log(formatChecks(checks));
+        console.log(checks.every((c) => c.ok) ? "\nAll set." : "\nFix the lines marked FIX, then run doctor again.");
+        break;
+      }
       case "status": {
         const s = computeStats(app.db);
         console.log(`Delphi: ${app.modes.delphi} | search: ${app.modes.search} | LLM: ${app.modes.llm} | auto-submit: ${app.settings.autoSubmit ? "on" : "off"}`);
