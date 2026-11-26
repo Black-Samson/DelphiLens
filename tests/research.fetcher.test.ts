@@ -91,3 +91,18 @@ describe("PDF reading", () => {
     expect(page?.text).toContain("2.6 percent");
   });
 });
+
+describe("live JSON data", () => {
+  it("reads JSON APIs and stamps them with the time they were read", async () => {
+    const body = JSON.stringify({ query: { statistics: { articles: 7271234 } } });
+    const fetchFn = (async (url: string) =>
+      url.endsWith("robots.txt")
+        ? new Response("", { status: 404 })
+        : new Response(body, { headers: { "content-type": "application/json; charset=utf-8" } })) as unknown as typeof fetch;
+    const before = Date.now();
+    const page = await new LiveFetcher(fetchFn).fetch("https://en.wikipedia.org/w/api.php?action=query&meta=siteinfo&siprop=statistics&format=json");
+    expect(page?.text).toContain('"articles": 7271234');
+    expect(page?.published).toBeNull();
+    expect(Date.parse(page!.retrievedAt!)).toBeGreaterThanOrEqual(before);
+  });
+});

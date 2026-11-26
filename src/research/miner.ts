@@ -129,7 +129,11 @@ export async function findCandidates(
     }
   }
   st.kept = merged.length;
-  return rankResults(merged, dataSourceHosts(market)).slice(0, limit);
+  // The market's listed data sources are where the answer will appear: always check them directly, first.
+  const direct = (market.dataSources ?? [])
+    .filter((url) => !seen.has(normalizeUrl(url)) && !isPaywalled(url))
+    .map((url) => ({ title: "Official data source listed by the market", url, snippet: "", published: null }));
+  return [...direct, ...rankResults(merged, dataSourceHosts(market))].slice(0, limit + direct.length);
 }
 
 export function describeSearch(st: SearchStats, opened: string | null): string {
@@ -166,7 +170,7 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
   const prior = db
     .prepare("SELECT id, note FROM submissions WHERE market_id = ? AND status != 'discarded' ORDER BY id")
     .all(market.marketId) as PriorNote[];
-  const passing: { result: SearchResult; text: string; verification: Verification }[] = [];
+  const passing: { result: SearchResult; text: string; verification: Verification; live: boolean }[] = [];
 
   const searchStats: SearchStats = { queries: 0, failed: 0, firstError: null, results: 0, paywalled: 0, tooOld: 0, kept: 0 };
   const candidates = await findCandidates(market, deps, 10, searchStats);
@@ -185,8 +189,10 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
       outcome.log.push(`Not publicly readable: ${candidate.url}`);
       continue;
     }
-    const result = { ...candidate, published: candidate.published ?? page.published };
-    if (!isFresh(result.published, market.evidenceCutoff, deps.maxAgeDays, now, marketOpenedAt(market.resolutionCriteria))) {
+    // Live data (a JSON API) is dated by when it was read: that is when the fact was observed.
+    const result = { ...candidate, published: candidate.published ?? page.published ?? page.retrievedAt ?? null };
+    const checkTime = page.retrievedAt ? new Date(Math.max(Date.parse(page.retrievedAt), now.getTime())) : now;
+    if (!isFresh(result.published, market.evidenceCutoff, deps.maxAgeDays, checkTime, marketOpenedAt(market.resolutionCriteria))) {
       outcome.log.push(`Not new since the market opened (or undated): ${candidate.url}`);
       continue;
     }
@@ -214,7 +220,7 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
       if (!(err instanceof LLMOutputError)) throw err;
       deps.onIssue?.("llm_error", `Same-fact check failed: ${err.message}`, { url: candidate.url });
     }
-    passing.push({ result, text: page.text, verification });
+    passing.push({ result, text: page.text, verification, live: Boolean(page.retrievedAt && !candidate.published && !page.published) });
   }
 
   let stance: Stance | null = locked;
@@ -251,7 +257,7 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
   }
   const note = composeNote(
     brief,
-    accepted.map((a) => ({ url: a.result.url, published: a.result.published, quote: a.verification.quote })),
+    accepted.map((a) => ({ url: a.result.url, published: a.result.published, quote: a.verification.quote, live: a.live })),
   );
   const links = accepted.map((a) => a.result.url);
   const files = saveSnapshots(deps.snapshotsDir, market.marketId, accepted);

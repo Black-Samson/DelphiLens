@@ -203,10 +203,35 @@ describe("markets with official data sources", () => {
     };
     saveMarkets(db, [cpi]);
     const found = await findCandidates(cpi, deps);
-    expect(new URL(found[0].url).hostname).toBe("destatis.de");
+    // The listed data source itself comes first, then search results from that site.
+    expect(found[0].url).toBe("https://www.destatis.de");
+    expect(new URL(found[1].url).hostname).toBe("destatis.de");
     // The agency.example.gov release is 2 days old, from before the market opened.
     expect(found.some((r) => r.url.includes("agency.example.gov/releases"))).toBe(false);
     const out = await mineMarket(db, cpi, deps);
     expect(out.links[0]).toContain("destatis.de");
+  });
+
+  it("checks a live JSON data source directly and dates it by when it was read", async () => {
+    const { db, deps } = setup();
+    const wiki = {
+      ...sampleMarkets(NOW)[5],
+      question: "Will English Wikipedia siteinfo API show at least 7,275,500 articles on Dec 10, 2026?",
+      dataSources: ["https://en.wikipedia.org/w/api.php?action=query&meta=siteinfo&siprop=statistics"],
+      resolutionCriteria: null,
+    };
+    saveMarkets(db, [wiki]);
+    deps.now = () => new Date();
+    deps.search = { search: async () => [] };
+    deps.fetcher = {
+      fetch: async (url) =>
+        url.includes("wikipedia")
+          ? { text: '{"articles": 7273000} The count was confirmed as released.', published: null, retrievedAt: new Date().toISOString() }
+          : null,
+    };
+    const out = await mineMarket(db, wiki, deps);
+    expect(out.status).toBe("draft_created");
+    expect(out.links).toEqual([wiki.dataSources[0]]);
+    expect(out.note).toMatch(/live data read \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC/);
   });
 });

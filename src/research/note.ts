@@ -11,6 +11,8 @@ export interface NoteSource {
   url: string;
   published: string | null;
   quote: string | null;
+  /** Live data read at `published` (e.g. a JSON API), rather than a dated publication. */
+  live?: boolean;
 }
 
 function host(url: string): string {
@@ -28,7 +30,9 @@ function clip(text: string, max: number): string {
 
 export function composeNote(brief: string, sources: NoteSource[]): string {
   const lines = sources.map((s, i) => {
-    const meta = `${host(s.url)}, published ${s.published ? s.published.slice(0, 10) : "date unknown"}`;
+    const meta = s.live && s.published
+      ? `${host(s.url)}, live data read ${s.published.slice(0, 16).replace("T", " ")} UTC`
+      : `${host(s.url)}, published ${s.published ? s.published.slice(0, 10) : "date unknown"}`;
     const quote = s.quote ? `"${clip(s.quote, MAX_QUOTE_CHARS)}" ` : "";
     return `${i + 1}. ${quote}(${meta}) ${s.url}`;
   });

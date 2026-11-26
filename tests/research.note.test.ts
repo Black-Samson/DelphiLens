@@ -24,4 +24,11 @@ describe("note composer", () => {
     expect(note.startsWith(brief)).toBe(true);
     expect(note).toContain("https://a.gov/1");
   });
+
+  it("labels live data with the time it was read", () => {
+    const note = composeNote(brief, [
+      { url: "https://en.wikipedia.org/w/api.php?action=query&meta=siteinfo", published: "2026-11-25T23:50:10.000Z", quote: null, live: true },
+    ]);
+    expect(note).toContain("(en.wikipedia.org, live data read 2026-11-25 23:50 UTC)");
+  });
 });

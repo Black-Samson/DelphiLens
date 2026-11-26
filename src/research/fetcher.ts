@@ -7,7 +7,14 @@ export interface FetchedPage {
   text: string;
   /** Publication date found in the page's metadata, if any (ISO 8601). */
   published: string | null;
+  /**
+   * Set for live machine-readable data (a JSON API such as Wikipedia's siteinfo or
+   * nodejs.org/dist/index.json): the values are as of the moment it was read.
+   */
+  retrievedAt?: string;
 }
+
+export const MAX_JSON_CHARS = 12_000;
 
 export interface PageFetcher {
   /** Clean page text, or null when it can't be read publicly. */
@@ -144,6 +151,16 @@ export class LiveFetcher implements PageFetcher {
     if (type.includes("html")) return extractPage(await res.text());
     if (type.includes("pdf") || url.pathname.toLowerCase().endsWith(".pdf")) {
       return extractPdf(new Uint8Array(await res.arrayBuffer()));
+    }
+    if (type.includes("json")) {
+      const raw = await res.text();
+      let text = raw;
+      try {
+        text = JSON.stringify(JSON.parse(raw), null, 1);
+      } catch {
+        /* keep the raw body */
+      }
+      return { text: text.slice(0, MAX_JSON_CHARS), published: null, retrievedAt: new Date().toISOString() };
     }
     if (type.startsWith("text/")) return { text: (await res.text()).trim(), published: null };
     return null;
