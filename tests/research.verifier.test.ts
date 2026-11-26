@@ -73,6 +73,7 @@ describe("verifier", () => {
     expect(llm.prompts[0]).toContain("MARKET_OPENED: 2026-11-24T09:17:34.007Z");
     expect(llm.prompts[0]).toContain("RESOLUTION_CRITERIA: Yes wins if the rate");
     expect(llm.prompts[0]).toContain("partial progress counts");
+    expect(llm.prompts[0]).toMatch(/^NOW: \d{4}-\d{2}-\d{2}T.*has not happened yet/m);
   });
 
   it("cleans messy LLM output", async () => {

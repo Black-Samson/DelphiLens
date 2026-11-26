@@ -48,13 +48,15 @@ const asBool = (v: unknown) => (typeof v === "string" ? ["true", "yes", "1"].inc
 const MAX_CRITERIA_CHARS = 1500;
 
 function header(task: string, market: MarketInfo, result: SearchResult): string {
+  const now = new Date().toISOString();
   const lines = [
     `TASK: ${task}`,
+    `NOW: ${now} (the current time. Anything after it has not happened yet: never state that something did or did not happen in a period that has not finished.)`,
     `QUESTION: ${market.question}`,
     `CURRENT_YES_ODDS: ${market.yesOdds ?? "unknown"}`,
     `EVIDENCE_CUTOFF: ${market.evidenceCutoff ?? "unknown"}`,
   ];
-  const opened = marketOpenedAt(market.resolutionCriteria);
+  const opened = marketOpenedAt(market.resolutionCriteria, new Date(now));
   if (opened) lines.push(`MARKET_OPENED: ${opened} (facts public before this are presumed already priced)`);
   if (market.resolutionCriteria) {
     lines.push(`RESOLUTION_CRITERIA: ${market.resolutionCriteria.replace(/\s+/g, " ").slice(0, MAX_CRITERIA_CHARS)}`);
@@ -167,6 +169,8 @@ export async function writeBrief(
       "If the question has a numeric threshold and a deadline, give the measurable gap instead: the current value,",
       "the threshold, the difference, the time left and the average rate per day needed. Do the arithmetic carefully.",
       "For live data read from an API or data page, say 'as read at <time> UTC', not 'published'.",
+      "Describe only what has happened up to NOW. If the question's window is still open or has not started,",
+      "say what is known so far (latest value, latest release and its date, the usual interval) and that the window is still open.",
       'Reply with JSON: {"brief": "..."}',
       feedback,
       "TEXT:",
