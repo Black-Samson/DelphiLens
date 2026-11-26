@@ -129,6 +129,7 @@ export class MockLLM implements LLMProvider {
       publicly_accessible: !PRIVATE.some((p) => text.includes(p)),
       verifiable: Boolean(field(prompt, "PUBLISHED")) && !UNVERIFIED.some((p) => text.includes(p)),
       shifts_probability: stance !== null,
+      likely_known: false,
       stance,
       confidence: stance ? Math.min(0.95, 0.5 + 0.15 * Math.abs(yes - no)) : 0.2,
       reason: "Mock keyword check; a real LLM replaces this judgment.",

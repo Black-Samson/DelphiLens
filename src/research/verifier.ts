@@ -26,6 +26,8 @@ export interface Verification {
   reason: string;
   /** The fact in one plain sentence, used to spot repeats. */
   fact: string;
+  /** The AI's view: a forecaster researching the question would already have found this. */
+  likelyKnown: boolean;
   /** A sentence copied word for word from the source, or null if the LLM's quote was not found in it. */
   quote: string | null;
   passed: boolean;
@@ -101,7 +103,13 @@ export async function verifyEvidence(llm: LLMProvider, market: MarketInfo, resul
     "   A fact that only restates the status quo, with nothing that changes the outlook, does not shift the",
     "   probability: set shifts_probability false.",
     "   Facts that were public before MARKET_OPENED, opinions and predictions do not count.",
-    'Reply with JSON keys: publicly_accessible (bool), verifiable (bool), shifts_probability (bool),',
+    "4. likely_known: Delphi's forecaster researches every question itself. Would it already have this fact?",
+    "   true if the fact is on the main official page for the question, in the top search results, in a summary",
+    "   of public data anyone can look up (release lists, schedules, background), or widely reported in English.",
+    "   false only for facts that are new and easy to miss: published in the last day or two, local-language or",
+    "   regional reporting, niche communities, a specific detail inside a long document, or early/partial data.",
+    "   The judge pays nothing for facts it already has, so when in doubt, true.",
+    'Reply with JSON keys: publicly_accessible (bool), verifiable (bool), shifts_probability (bool), likely_known (bool),',
     'stance ("YES" if it makes YES more likely than the current odds, "NO" if less likely, or null), confidence (0 to 1),',
     "reason (one sentence),",
     "fact (the fact in one plain sentence, with its date), and quote (the single sentence from the TEXT that states",
@@ -121,9 +129,15 @@ export async function verifyEvidence(llm: LLMProvider, market: MarketInfo, resul
     confidence,
     reason: String(data.reason ?? ""),
     fact: String(data.fact ?? "").trim(),
+    // Missing answers count as "known": the judge pays nothing for facts the forecaster has.
+    likelyKnown: data.likely_known === undefined ? true : asBool(data.likely_known),
     quote: findQuote(text, data.quote),
   };
-  return { ...v, passed: v.publiclyAccessible && v.verifiable && v.shiftsProbability && stance !== null };
+  if (v.likelyKnown && v.shiftsProbability) v.reason = `Likely already known to the forecaster. ${v.reason}`.trim();
+  return {
+    ...v,
+    passed: v.publiclyAccessible && v.verifiable && v.shiftsProbability && !v.likelyKnown && stance !== null,
+  };
 }
 
 /** Brief rules: 2 or 3 sentences, short, factual, no first person, no hype. */

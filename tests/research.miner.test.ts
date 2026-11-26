@@ -160,6 +160,7 @@ describe("choosing a side from all the evidence", () => {
         stance: github ? "NO" : "YES",
         confidence: github ? this.noConfidence : 0.6,
         reason: "split",
+        likely_known: false,
         fact: "A dated fact.",
         quote: null,
       });
@@ -179,6 +180,7 @@ describe("choosing a side from all the evidence", () => {
         stance: this.n++ % 2 ? "NO" : "YES",
         confidence: 0.7,
         reason: "alternating",
+        likely_known: false,
         fact: `Fact ${this.n}.`,
         quote: null,
       });

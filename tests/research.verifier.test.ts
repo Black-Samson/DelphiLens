@@ -77,6 +77,17 @@ describe("verifier", () => {
     expect(llm.prompts[0]).toMatch(/^NOW: \d{4}-\d{2}-\d{2}T.*has not happened yet/m);
   });
 
+  it("skips facts the forecaster would already know, and treats a missing answer as known", async () => {
+    const base = { publicly_accessible: true, verifiable: true, shifts_probability: true, stance: "YES", confidence: 0.8, reason: "Release list." };
+    const known = await verifyEvidence(new Scripted([JSON.stringify({ ...base, likely_known: true })]), market, result, "x");
+    expect(known.passed).toBe(false);
+    expect(known.reason).toMatch(/^Likely already known to the forecaster/);
+    const missing = await verifyEvidence(new Scripted([JSON.stringify(base)]), market, result, "x");
+    expect(missing.passed).toBe(false);
+    const fresh = await verifyEvidence(new Scripted([JSON.stringify({ ...base, likely_known: false })]), market, result, "x");
+    expect(fresh.passed).toBe(true);
+  });
+
   it("cleans messy LLM output", async () => {
     const llm = new Scripted([
       JSON.stringify({ publicly_accessible: "false", verifiable: true, shifts_probability: true, stance: "yes", confidence: 5 }),
