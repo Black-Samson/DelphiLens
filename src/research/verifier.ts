@@ -192,7 +192,16 @@ export function futureClaims(brief: string, now = new Date()): string[] {
     const forward = /\b(remains? open|still open|has not (?:started|begun|opened)|will|opens|starts|begins)\b/i.test(sentence);
     if (!pastTense || forward) continue;
     for (const [date] of sentence.matchAll(/(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)/g)) {
-      if (date > today) found.push(date);
+      if (date > today && !found.includes(date)) found.push(date);
+    }
+    // Written-out dates too: "28 Nov 2026", "Nov 28, 2026".
+    const months = "jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec";
+    const written = new RegExp(`\\b(?:(\\d{1,2}) (${months})[a-z]*\\.? (\\d{4})|(${months})[a-z]*\\.? (\\d{1,2}),? (\\d{4}))\\b`, "gi");
+    for (const m of sentence.matchAll(written)) {
+      const [day, mon, year] = m[1] ? [m[1], m[2], m[3]] : [m[5], m[4], m[6]];
+      const month = months.split("|").indexOf(mon.slice(0, 3).toLowerCase()) + 1;
+      const iso = `${year}-${String(month).padStart(2, "0")}-${day.padStart(2, "0")}`;
+      if (iso > today && !found.includes(iso)) found.push(iso);
     }
   }
   return found;

@@ -118,6 +118,8 @@ describe("verifier", () => {
     const sneaky = "The article records no formal invocation of Article 49.3 on the PLFSS during the period after 28 Nov 2026 (2026-11-28).";
     expect(futureClaims(sneaky, now)).toEqual(["2026-11-28"]);
     expect(futureClaims("The CMP is scheduled for 2026-11-28.", now)).toEqual([]);
+    expect(futureClaims("No 49.3 was recorded during the period after 28 Nov 2026.", now)).toEqual(["2026-11-28"]);
+    expect(futureClaims("No vote has happened since Nov 20, 2026.", now)).toEqual([]);
     expect(validateBrief(ok, now)).toEqual([]);
   });
 
