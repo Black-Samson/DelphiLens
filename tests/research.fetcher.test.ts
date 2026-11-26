@@ -106,3 +106,16 @@ describe("live JSON data", () => {
     expect(Date.parse(page!.retrievedAt!)).toBeGreaterThanOrEqual(before);
   });
 });
+
+describe("market-listed data sources", () => {
+  it("reads an API the market names even where robots.txt disallows crawling", async () => {
+    const fetchFn = (async (url: string) =>
+      url.endsWith("robots.txt")
+        ? new Response("User-agent: *\nDisallow: /w/")
+        : new Response('{"articles": 1}', { headers: { "content-type": "application/json" } })) as unknown as typeof fetch;
+    const fetcher = new LiveFetcher(fetchFn);
+    const api = "https://en.wikipedia.org/w/api.php?action=query&meta=siteinfo&format=json";
+    expect(await fetcher.fetch(api)).toBeNull();
+    expect((await fetcher.fetch(api, { listedByMarket: true }))?.text).toContain('"articles": 1');
+  });
+});

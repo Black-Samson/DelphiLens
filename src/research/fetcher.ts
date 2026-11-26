@@ -16,9 +16,18 @@ export interface FetchedPage {
 
 export const MAX_JSON_CHARS = 12_000;
 
+export interface FetchOptions {
+  /**
+   * The URL is a data source Delphi itself lists for the market (an API or
+   * results page it resolves from). One direct read of it is not crawling,
+   * so robots.txt crawl rules (e.g. Wikipedia's "Disallow: /w/") do not apply.
+   */
+  listedByMarket?: boolean;
+}
+
 export interface PageFetcher {
   /** Clean page text, or null when it can't be read publicly. */
-  fetch(url: string): Promise<FetchedPage | null>;
+  fetch(url: string, options?: FetchOptions): Promise<FetchedPage | null>;
 }
 
 const DATE_META = [
@@ -137,14 +146,14 @@ export class LiveFetcher implements PageFetcher {
     return robotsAllows(this.robots.get(url.origin) ?? "", url.pathname);
   }
 
-  async fetch(raw: string): Promise<FetchedPage | null> {
+  async fetch(raw: string, options: FetchOptions = {}): Promise<FetchedPage | null> {
     let url: URL;
     try {
       url = new URL(raw);
     } catch {
       return null;
     }
-    if (!(await this.allowed(url))) return null;
+    if (!options.listedByMarket && !(await this.allowed(url))) return null;
     const res = await this.get(url.toString());
     if (!res || res.status !== 200) return null;
     const type = res.headers.get("content-type")?.toLowerCase() ?? "";

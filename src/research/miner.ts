@@ -184,7 +184,8 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
       outcome.log.push(`Already used: ${candidate.url}`);
       continue;
     }
-    const page = await deps.fetcher.fetch(candidate.url);
+    const listed = (market.dataSources ?? []).includes(candidate.url);
+    const page = await deps.fetcher.fetch(candidate.url, listed ? { listedByMarket: true } : undefined);
     if (!page?.text) {
       outcome.log.push(`Not publicly readable: ${candidate.url}`);
       continue;
