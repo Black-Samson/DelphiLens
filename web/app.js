@@ -150,14 +150,34 @@ async function loadMarkets() {
       .join("") || `<tr><td colspan="7" class="muted">No markets yet. Press Refresh markets.</td></tr>`;
 }
 
+function showMineResult(out) {
+  const box = $("mine-result");
+  const ok = out.status === "draft_created";
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="label">Last mining run</div>
+    <p style="margin:10px 0 6px"><strong>${esc(out.question || "")}</strong></p>
+    <p><span class="pill ${ok ? esc(out.stance) : ""}">${ok ? `Draft ready · ${esc(out.stance)}` : esc(out.status.replace("_", " "))}</span>
+      ${ok ? `<span class="muted">Read it in Review &amp; receipts before you approve.</span>` : ""}</p>
+    ${ok ? `<p>${esc(out.note).replace(/\n/g, "<br>")}</p>` : ""}
+    <ul class="links">${out.log.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>`;
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
 $("markets").addEventListener("click", (e) => {
   const button = e.target.closest("button[data-mine]");
   if (!button) return;
   busy(button, async () => {
-    button.textContent = "Mining...";
-    const out = await api("POST", `/api/markets/${encodeURIComponent(button.dataset.mine)}/mine`);
-    toast(out.status === "draft_created" ? `Draft ready (${out.stance}). Review it in Review & receipts.` : `No new evidence: ${out.log.at(-1) || out.status}`);
-    button.textContent = "Mine now";
+    const started = Date.now();
+    const tick = setInterval(() => (button.textContent = `Mining ${Math.round((Date.now() - started) / 1000)}s`), 1000);
+    try {
+      const out = await api("POST", `/api/markets/${encodeURIComponent(button.dataset.mine)}/mine`);
+      showMineResult(out);
+      toast(out.status === "draft_created" ? `Draft ready (${out.stance}).` : "No new evidence this time. Details are under Refresh markets.");
+    } finally {
+      clearInterval(tick);
+      button.textContent = "Mine now";
+    }
     loadMarkets();
   });
 });

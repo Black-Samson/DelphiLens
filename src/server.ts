@@ -96,7 +96,11 @@ export function createHandler(makeApp: () => App) {
     ["POST", /^\/api\/markets\/([^/]+)\/mine$/, async (m) => {
       const market = getMarket(app.db, decodeURIComponent(m[1]));
       if (!market) throw new HttpError(404, "Unknown market");
-      return mineMarket(app.db, market, minerDeps(app));
+      // Progress goes to the terminal running the dashboard, so long runs are visible.
+      console.log(`\nMining: ${market.question}`);
+      const out = await mineMarket(app.db, market, { ...minerDeps(app), onProgress: (l) => console.log(`  ... ${l}`) });
+      console.log(`  => ${out.status}${out.stance ? ` (${out.stance})` : ""}`);
+      return { ...out, question: market.question };
     }],
     ["GET", /^\/api\/submissions$/, async () => submissions(app)],
     ["POST", /^\/api\/submissions\/(\d+)\/approve$/, async (m) => submitDraft(app.db, app.evidence, Number(m[1]), app.report)],
@@ -171,7 +175,11 @@ export function createHandler(makeApp: () => App) {
 
 export function startServer(port: number, makeApp: () => App = () => createApp()): http.Server {
   // Bound to localhost only: the dashboard can submit evidence, so it is never exposed to the network.
-  return http.createServer(createHandler(makeApp)).listen(port, "127.0.0.1");
+  const server = http.createServer(createHandler(makeApp));
+  // Mining with real search and AI can take several minutes: never cut those requests off.
+  server.requestTimeout = 0;
+  server.headersTimeout = 0;
+  return server.listen(port, "127.0.0.1");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
