@@ -139,7 +139,7 @@ All settings live in `.env`. `.env.example` documents every one.
 | `MARKETS_SOURCE`, `MARKETS_URL` | Default to `url` and `https://competition.delphi.fyi/markets.json` |
 | `SEARCH_API_KEY` | Tavily key |
 | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | Any OpenAI-compatible chat API |
-| `MAX_SOURCE_AGE_DAYS` | Freshness window for sources (default 14) |
+| `MAX_SOURCE_AGE_DAYS` | Only facts from the last N days (default 3; older facts are usually already known) |
 | `WORKER_INTERVAL_MINUTES` | Time between full worker cycles (default 30) |
 | `MARKET_POLL_MINUTES` | How often to check for new markets between cycles (default 5) |
 | `DISCORD_WEBHOOK_URL`, `SMTP_*`, `DIGEST_EMAIL_*` | Optional digest delivery |
