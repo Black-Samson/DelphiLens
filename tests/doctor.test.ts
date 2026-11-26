@@ -55,6 +55,14 @@ describe("doctor", () => {
     expect(ai?.detail).toMatch(/Check LLM_MODEL \(now "gpt-4o-mini"\)/);
   });
 
+  it("says a 503 means the provider is busy, not a wrong model", async () => {
+    const app = liveApp();
+    app.llm = { complete: async () => Promise.reject(new Error('LLM returned HTTP 503: "This model is currently experiencing high demand", "status": "UNAVAILABLE"')) };
+    const ai = (await runDoctor(app)).find((c) => c.name === "AI");
+    expect(ai?.detail).toMatch(/provider is busy right now \(not your setup\)/);
+    expect(ai?.detail).not.toMatch(/Check LLM_MODEL/);
+  });
+
   it("flags unaccepted terms and a missing wallet", async () => {
     const app = liveApp();
     vi.spyOn(app.evidence, "getTerms").mockResolvedValue({ data: { version: "v3", url: "https://t", acceptedAt: null }, meta: {} });

@@ -25,8 +25,17 @@ export class OpenAICompatibleLLM implements LLMProvider {
   /** Some free providers reject JSON mode; after one refusal, ask for plain text (replies are parsed leniently). */
   private jsonMode = true;
 
+  /** Waits before retrying a busy (429/503) or failing (500/502) provider. Tests set this to [0, 0]. */
+  retryDelaysMs = [5_000, 15_000];
+
   async complete(system: string, prompt: string): Promise<string> {
     let res = await this.request(system, prompt);
+    for (const delay of this.retryDelaysMs) {
+      if (![429, 500, 502, 503].includes(res.status)) break;
+      const after = Number(res.headers.get("retry-after"));
+      await new Promise((r) => setTimeout(r, Number.isFinite(after) && after > 0 ? Math.min(after * 1000, 30_000) : delay));
+      res = await this.request(system, prompt);
+    }
     if (res.status === 400 && this.jsonMode) {
       const detail = await res.clone().text();
       if (/response_format|json/i.test(detail)) {

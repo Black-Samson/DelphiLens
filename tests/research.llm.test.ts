@@ -37,9 +37,21 @@ describe("llm providers", () => {
     expect(calls).toBe(3);
   });
 
-  it("surfaces LLM errors", async () => {
-    const fetchFn = async () => new Response("quota", { status: 429 });
-    await expect(new OpenAICompatibleLLM("u", "k", "m", fetchFn as unknown as typeof fetch).complete("s", "p")).rejects.toThrow(/429/);
+  it("retries a busy provider, then reports the error", async () => {
+    let calls = 0;
+    const busyOnce = async () =>
+      ++calls === 1
+        ? new Response('{"error":"high demand"}', { status: 503 })
+        : new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] }));
+    const llm = new OpenAICompatibleLLM("u", "k", "m", busyOnce as unknown as typeof fetch);
+    llm.retryDelaysMs = [0, 0];
+    expect(await llm.complete("s", "p")).toBe("{}");
+    expect(calls).toBe(2);
+
+    const alwaysBusy = async () => new Response("quota", { status: 429 });
+    const stuck = new OpenAICompatibleLLM("u", "k", "m", alwaysBusy as unknown as typeof fetch);
+    stuck.retryDelaysMs = [0, 0];
+    await expect(stuck.complete("s", "p")).rejects.toThrow(/429/);
   });
 
   it("mock refuses unknown tasks", async () => {
