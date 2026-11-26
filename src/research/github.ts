@@ -62,3 +62,24 @@ export function summarizeReleases(json: unknown): string | null {
   }
   return `${rhythm}GitHub releases, newest first:\n${lines.join("\n")}`;
 }
+
+/**
+ * For a market about one repository, pages that can't say anything about its
+ * releases: CI runs, other repositories, and malformed issue links.
+ */
+export function isGithubNoise(url: string, repo: string | null): boolean {
+  if (!repo) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.hostname !== "github.com") return false;
+  const [owner, name, section, id] = parsed.pathname.split("/").filter(Boolean);
+  if (!owner || !name) return false;
+  if (`${owner}/${name}`.toLowerCase() !== repo.toLowerCase()) return true;
+  if (section === "actions") return true;
+  if (section === "issues" && id && !/^\d+$/.test(id)) return true;
+  return false;
+}

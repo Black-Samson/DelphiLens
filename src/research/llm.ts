@@ -25,16 +25,29 @@ export class OpenAICompatibleLLM implements LLMProvider {
   /** Some free providers reject JSON mode; after one refusal, ask for plain text (replies are parsed leniently). */
   private jsonMode = true;
 
-  /** Waits before retrying a busy (429/503) or failing (500/502) provider. Tests set this to [0, 0]. */
-  retryDelaysMs = [5_000, 15_000];
+  /** Waits before retrying a busy (429/503), failing (500/502) or briefly unreachable provider. Tests set these to 0. */
+  retryDelaysMs = [5_000, 15_000, 30_000];
+
+  /** One request, retried when the connection itself blips (DNS hiccup, reset). */
+  private async requestWithNetworkRetry(system: string, prompt: string): Promise<Response> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.request(system, prompt);
+      } catch (err) {
+        const transient = /EAI_AGAIN|ECONNRESET|timed out|socket/i.test((err as Error).message);
+        if (!transient || attempt >= 2) throw err;
+        await new Promise((r) => setTimeout(r, this.retryDelaysMs[0] ?? 0));
+      }
+    }
+  }
 
   async complete(system: string, prompt: string): Promise<string> {
-    let res = await this.request(system, prompt);
+    let res = await this.requestWithNetworkRetry(system, prompt);
     for (const delay of this.retryDelaysMs) {
       if (![429, 500, 502, 503].includes(res.status)) break;
       const after = Number(res.headers.get("retry-after"));
-      await new Promise((r) => setTimeout(r, Number.isFinite(after) && after > 0 ? Math.min(after * 1000, 30_000) : delay));
-      res = await this.request(system, prompt);
+      await new Promise((r) => setTimeout(r, Number.isFinite(after) && after > 0 ? Math.min(after * 1000, 60_000) : delay));
+      res = await this.requestWithNetworkRetry(system, prompt);
     }
     if (res.status === 400 && this.jsonMode) {
       const detail = await res.clone().text();

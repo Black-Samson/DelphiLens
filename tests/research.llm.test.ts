@@ -44,13 +44,13 @@ describe("llm providers", () => {
         ? new Response('{"error":"high demand"}', { status: 503 })
         : new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] }));
     const llm = new OpenAICompatibleLLM("u", "k", "m", busyOnce as unknown as typeof fetch);
-    llm.retryDelaysMs = [0, 0];
+    llm.retryDelaysMs = [0, 0, 0];
     expect(await llm.complete("s", "p")).toBe("{}");
     expect(calls).toBe(2);
 
     const alwaysBusy = async () => new Response("quota", { status: 429 });
     const stuck = new OpenAICompatibleLLM("u", "k", "m", alwaysBusy as unknown as typeof fetch);
-    stuck.retryDelaysMs = [0, 0];
+    stuck.retryDelaysMs = [0, 0, 0];
     await expect(stuck.complete("s", "p")).rejects.toThrow(/429/);
   });
 

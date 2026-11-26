@@ -16,6 +16,7 @@ describe("network errors", () => {
 
   it("explains a wrong AI address instead of 'fetch failed'", async () => {
     const llm = new OpenAICompatibleLLM("https://generativelanguage.googleapi.com/v1beta/openai", "k", "m", failing("ENOTFOUND"));
+    llm.retryDelaysMs = [0, 0, 0];
     const err = await llm.complete("s", "p").catch((e) => e);
     expect(err).toBeInstanceOf(NetworkError);
     expect(err.message).toMatch(/the AI service \(LLM_BASE_URL\) at https:\/\/generativelanguage\.googleapi\.com: address not found/);

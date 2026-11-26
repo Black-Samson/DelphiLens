@@ -14,7 +14,7 @@ import type { MarketInfo } from "../markets/types";
 import type { PageFetcher } from "./fetcher";
 import type { LLMProvider } from "./llm";
 import { fullSearchPlan } from "./plan";
-import { marketRepo, releasesApiUrl } from "./github";
+import { isGithubNoise, marketRepo, releasesApiUrl } from "./github";
 import { dataSourceHosts } from "./queries";
 import type { SearchProvider, SearchResult } from "./search";
 import { saveSnapshots } from "./snapshots";
@@ -101,6 +101,7 @@ export async function findCandidates(
   const merged: SearchResult[] = [];
   const st: SearchStats = stats ?? { queries: 0, failed: 0, firstError: null, results: 0, paywalled: 0, tooOld: 0, kept: 0 };
   const opened = marketOpenedAt(market.resolutionCriteria, now);
+  const repoOfMarket = marketRepo(market);
   deps.onProgress?.("Planning searches...");
   const plan = await fullSearchPlan(deps.llm, market, deps.onIssue);
   for (const { query, domains } of plan) {
@@ -124,6 +125,7 @@ export async function findCandidates(
         st.paywalled++;
         continue;
       }
+      if (isGithubNoise(result.url, repoOfMarket)) continue;
       // Undated results stay for now: the page itself may carry a date.
       if (result.published && !isFresh(result.published, market.evidenceCutoff, deps.maxAgeDays, now, opened)) {
         st.tooOld++;

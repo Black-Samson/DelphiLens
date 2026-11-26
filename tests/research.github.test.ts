@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { extractPage, LiveFetcher } from "../src/research/fetcher";
-import { marketRepo, releasesApiUrl, summarizeReleases } from "../src/research/github";
+import { isGithubNoise, marketRepo, releasesApiUrl, summarizeReleases } from "../src/research/github";
 
 describe("GitHub release markets", () => {
   it("finds the repository from data sources or the question", () => {
@@ -62,5 +62,16 @@ describe("GitHub release markets", () => {
     expect(hashUrl("https://api.github.com/repos/oven-sh/bun/releases?per_page=15")).toBe(
       hashUrl("https://api.github.com/repos/oven-sh/bun/releases"),
     );
+  });
+
+  it("skips CI runs, other repositories and broken issue links for a repo market", () => {
+    const repo = "oven-sh/bun";
+    expect(isGithubNoise("https://github.com/oven-sh/bun/actions/runs/32513146917", repo)).toBe(true);
+    expect(isGithubNoise("https://github.com/AndrewM-F/bun-native/actions", repo)).toBe(true);
+    expect(isGithubNoise("https://github.com/oven-sh/bun/issues/module.generated", repo)).toBe(true);
+    expect(isGithubNoise("https://github.com/oven-sh/bun/issues/1234", repo)).toBe(false);
+    expect(isGithubNoise("https://github.com/oven-sh/bun/releases", repo)).toBe(false);
+    expect(isGithubNoise("https://bun.sh/blog/bun-v1.4.5", repo)).toBe(false);
+    expect(isGithubNoise("https://github.com/x/y/actions", null)).toBe(false);
   });
 });
