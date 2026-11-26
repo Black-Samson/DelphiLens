@@ -123,6 +123,11 @@ export function validateBrief(brief: string): string[] {
   if (brief.length > MAX_BRIEF_CHARS) problems.push(`Brief must be under ${MAX_BRIEF_CHARS} characters`);
   if (brief.includes("!")) problems.push("No exclamation marks");
   if (/\b(I (think|believe|feel|expect)|we|our|my)\b/i.test(brief)) problems.push("No first person or opinions");
+  if (/\b(unlikely|likely|probably|expected to|is set to|bound to|almost certainly|indicating that .* will)\b/i.test(brief)) {
+    problems.push(
+      "No predictions or likelihood words (likely, unlikely, probably...): state facts and the measurable gap to the threshold, and let the forecaster judge",
+    );
+  }
   return problems;
 }
 
@@ -153,7 +158,11 @@ export async function writeBrief(
       `STANCE: ${stance}`,
       `Write a 2 to 3 sentence note for the forecaster that combines the ${sources.length} source(s) below:`,
       "state the dated facts, name who published them, and say how they bear on the question.",
-      "Use only facts from the sources. Objective, specific, no opinions, no first person.",
+      "Use only facts from the sources. Objective, specific, no opinions, no first person, and no predictions",
+      "(never write likely, unlikely or probably: the forecaster judges likelihood).",
+      "If the question has a numeric threshold and a deadline, give the measurable gap instead: the current value,",
+      "the threshold, the difference, the time left and the average rate per day needed. Do the arithmetic carefully.",
+      "For live data read from an API or data page, say 'as read at <time> UTC', not 'published'.",
       'Reply with JSON: {"brief": "..."}',
       feedback,
       "TEXT:",

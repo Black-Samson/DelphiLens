@@ -89,6 +89,8 @@ describe("verifier", () => {
     ["One. Two. Three. Four.", false],
     ["A fact. Another fact!", false],
     ["We think so. It happened.", false],
+    ["The count is 7,269,362. It is unlikely to reach the threshold.", false],
+    ["The count read 7,269,362 at 00:52 UTC. That is 6,138 short, about 424 per day for 14.5 days.", true],
   ])("validates brief %s", (brief, ok) => {
     expect(validateBrief(brief).length === 0).toBe(ok);
   });
