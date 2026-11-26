@@ -19,7 +19,7 @@ import { isGithubNoise, marketRepo, releasesApiUrl } from "./github";
 import { dataSourceHosts } from "./queries";
 import type { SearchProvider, SearchResult } from "./search";
 import { saveSnapshots } from "./snapshots";
-import { isFresh, isPaywalled, marketOpenedAt, rankResults } from "./sources";
+import { isFresh, isPaywalled, isUnusableLink, marketOpenedAt, rankResults } from "./sources";
 import { composeNote } from "./note";
 import { findRepeat, type PriorNote } from "./samefact";
 import { verifyEvidence, writeBrief, type Verification } from "./verifier";
@@ -128,7 +128,7 @@ export async function findCandidates(
         st.paywalled++;
         continue;
       }
-      if (isGithubNoise(result.url, repoOfMarket)) continue;
+      if (isGithubNoise(result.url, repoOfMarket) || isUnusableLink(result.url)) continue;
       // Undated results stay for now: the page itself may carry a date.
       if (result.published && !isFresh(result.published, market.evidenceCutoff, deps.maxAgeDays, now, opened)) {
         st.tooOld++;

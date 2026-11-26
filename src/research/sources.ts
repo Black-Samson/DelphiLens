@@ -86,3 +86,31 @@ export function rankResults(results: SearchResult[], extraPrimary: string[] = []
     return (parseDate(b.published)?.getTime() ?? 0) - (parseDate(a.published)?.getTime() ?? 0);
   });
 }
+
+/**
+ * Links that can never be evidence: search-engine redirects (the judge would open
+ * the redirect, not the article), the search provider's own pages, and social
+ * networks that refuse automated readers and need a login.
+ */
+const UNUSABLE = [
+  { host: "google.com", path: /^\/url/ },
+  { host: "bing.com", path: /^\/ck\// },
+  { host: "tavily.com", path: /^\// },
+  { host: "facebook.com", path: /^\// },
+  { host: "instagram.com", path: /^\// },
+  { host: "x.com", path: /^\// },
+  { host: "twitter.com", path: /^\// },
+  { host: "tiktok.com", path: /^\// },
+  { host: "linkedin.com", path: /^\// },
+];
+
+export function isUnusableLink(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return true;
+  }
+  const h = parsed.hostname.toLowerCase().replace(/^www\./, "");
+  return UNUSABLE.some((u) => (h === u.host || h.endsWith(`.${u.host}`)) && u.path.test(parsed.pathname));
+}

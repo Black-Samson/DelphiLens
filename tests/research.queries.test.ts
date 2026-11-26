@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifySource, isFresh, isPaywalled, marketOpenedAt, rankResults } from "../src/research/sources";
+import { classifySource, isFresh, isPaywalled, isUnusableLink, marketOpenedAt, rankResults } from "../src/research/sources";
 import { coreTopic, dataSourceHosts, decomposeQuestion, MAX_QUERIES, searchPlan } from "../src/research/queries";
 
 const NOW = new Date("2026-11-24T12:00:00Z");
@@ -113,5 +113,19 @@ describe("market data sources", () => {
     const opened = daysAgo(1);
     expect(isFresh(daysAgo(3), null, 14, NOW, opened)).toBe(false);
     expect(isFresh(daysAgo(0.5), null, 14, NOW, opened)).toBe(true);
+  });
+});
+
+describe("unusable links", () => {
+  it.each([
+    ["https://www.google.com/url?opi=1&q=abc", true],
+    ["https://tavily.com/knowledge/company/abc", true],
+    ["https://www.facebook.com/Chequeado/posts/1", true],
+    ["https://x.com/MarketsOnDelphi", true],
+    ["https://www.google.com/search?q=x", false],
+    ["https://okdiario.com/espana/ultima-hora", false],
+    ["https://www.destatis.de/press", false],
+  ])("%s -> %s", (url, unusable) => {
+    expect(isUnusableLink(url)).toBe(unusable);
   });
 });

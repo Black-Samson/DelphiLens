@@ -118,6 +118,12 @@ describe("verifier", () => {
     expect(validateBrief(ok, now)).toEqual([]);
   });
 
+  it("gives up on a note that admits there is no new fact", async () => {
+    const llm = new Scripted(['{"brief":"A poll showed 18%. The threshold cannot yet be evaluated."}', '{"brief":"Fine. Fine."}']);
+    await expect(writeBrief(llm, market, [{ result, text: GOOD, fact: "f" }], "YES")).rejects.toThrow(/no usable new fact/);
+    expect(llm.prompts).toHaveLength(1);
+  });
+
   it("retries the brief once with feedback, then gives up", async () => {
     const fixed = new Scripted(['{"brief":"One sentence."}', '{"brief":"First fact. Second fact."}']);
     expect(await writeBrief(fixed, market, [{ result, text: GOOD, fact: "f" }], "YES")).toBe("First fact. Second fact.");

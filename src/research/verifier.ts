@@ -162,6 +162,9 @@ export function validateBrief(brief: string, now = new Date()): string[] {
       "No predictions or likelihood words (likely, unlikely, probably...): state facts and the measurable gap to the threshold, and let the forecaster judge",
     );
   }
+  if (/\b(cannot (yet )?be (evaluated|determined|assessed)|no (new )?(relevant )?information|does not (include|provide|contain) any|not enough information|no data (yet|available))\b/i.test(brief)) {
+    problems.push("NO_EVIDENCE: the note says there is no usable fact");
+  }
   const future = futureClaims(brief, now);
   if (future.length) {
     problems.push(
@@ -232,6 +235,8 @@ export async function writeBrief(
     const brief = String(parseJsonObject(await llm.complete(BRIEF_SYSTEM, prompt)).brief ?? "").trim();
     problems = validateBrief(brief);
     if (!problems.length) return brief;
+    // A note that admits there is no usable fact won't get better by rewording: stop.
+    if (problems.some((p) => p.startsWith("NO_EVIDENCE"))) throw new BriefError("The sources contain no usable new fact");
     feedback = `FIX: ${problems.join("; ")}`;
   }
   throw new BriefError(problems.join("; "));
