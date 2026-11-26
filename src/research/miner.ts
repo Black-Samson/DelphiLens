@@ -13,6 +13,7 @@ import { normalizeUrl } from "../hashing";
 import type { MarketInfo } from "../markets/types";
 import type { PageFetcher } from "./fetcher";
 import type { LLMProvider } from "./llm";
+import { recentLessons } from "./lessons";
 import { fullSearchPlan } from "./plan";
 import { isGithubNoise, marketRepo, releasesApiUrl } from "./github";
 import { dataSourceHosts } from "./queries";
@@ -194,6 +195,7 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
   deps.onProgress?.(describeSearch(searchStats, marketOpenedAt(market.resolutionCriteria, now)));
   let checked = 0;
   let aiFailures = 0;
+  const lessons = recentLessons(db);
   for (const candidate of candidates.slice(0, MAX_EXAMINED)) {
     checked++;
     deps.onProgress?.(`Checking source ${checked}/${Math.min(candidates.length, MAX_EXAMINED)}: ${candidate.url}`);
@@ -218,7 +220,7 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
 
     let verification: Verification;
     try {
-      verification = await verifyEvidence(deps.llm, market, result, page.text);
+      verification = await verifyEvidence(deps.llm, market, result, page.text, lessons);
       aiFailures = 0;
     } catch (err) {
       aiFailures++;

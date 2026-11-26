@@ -82,7 +82,13 @@ export function findQuote(text: string, quote: unknown): string | null {
   return at === -1 ? null : haystack.slice(at, at + wanted.length);
 }
 
-export async function verifyEvidence(llm: LLMProvider, market: MarketInfo, result: SearchResult, text: string): Promise<Verification> {
+export async function verifyEvidence(
+  llm: LLMProvider,
+  market: MarketInfo,
+  result: SearchResult,
+  text: string,
+  lessons: string[] = [],
+): Promise<Verification> {
   const prompt = [
     header("VERIFY", market, result),
     "Check three things about the TEXT:",
@@ -109,6 +115,9 @@ export async function verifyEvidence(llm: LLMProvider, market: MarketInfo, resul
     "   false only for facts that are new and easy to miss: published in the last day or two, local-language or",
     "   regional reporting, niche communities, a specific detail inside a long document, or early/partial data.",
     "   The judge pays nothing for facts it already has, so when in doubt, true.",
+    ...(lessons.length
+      ? ["What Delphi's judge said about our earlier submissions that earned nothing (avoid the same mistakes):", ...lessons.map((l) => `- ${l}`)]
+      : []),
     'Reply with JSON keys: publicly_accessible (bool), verifiable (bool), shifts_probability (bool), likely_known (bool),',
     'stance ("YES" if it makes YES more likely than the current odds, "NO" if less likely, or null), confidence (0 to 1),',
     "reason (one sentence),",
