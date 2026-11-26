@@ -136,7 +136,11 @@ export async function findCandidates(
   // The market's listed data sources are where the answer will appear: always check them directly, first.
   const repo = marketRepo(market);
   const direct = [...(repo ? [releasesApiUrl(repo)] : []), ...(market.dataSources ?? [])]
-    .filter((url, i, all) => all.indexOf(url) === i && !seen.has(normalizeUrl(url)) && !isPaywalled(url))
+    .filter((url, i, all) => {
+      const key = normalizeUrl(url);
+      const first = all.findIndex((u) => normalizeUrl(u) === key) === i;
+      return first && !seen.has(key) && !isPaywalled(url);
+    })
     .map((url) => ({
       title: url.includes("api.github.com") ? `GitHub releases of ${repo}` : "Official data source listed by the market",
       url,

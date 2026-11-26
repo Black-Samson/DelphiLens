@@ -5,6 +5,7 @@ import { marketRepo, releasesApiUrl, summarizeReleases } from "../src/research/g
 describe("GitHub release markets", () => {
   it("finds the repository from data sources or the question", () => {
     expect(marketRepo({ question: "Q?", dataSources: ["https://github.com/oven-sh/bun/releases"] })).toBe("oven-sh/bun");
+    expect(marketRepo({ question: "Q?", dataSources: ["https://api.github.com/repos/oven-sh/bun/releases"] })).toBe("oven-sh/bun");
     expect(
       marketRepo({ question: "Will oven-sh/bun publish a GitHub release tagged bun-v1.4.6 or later?", dataSources: [] }),
     ).toBe("oven-sh/bun");

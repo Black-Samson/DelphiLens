@@ -127,7 +127,7 @@ export async function verifyEvidence(llm: LLMProvider, market: MarketInfo, resul
 }
 
 /** Brief rules: 2 or 3 sentences, short, factual, no first person, no hype. */
-export function validateBrief(brief: string): string[] {
+export function validateBrief(brief: string, now = new Date()): string[] {
   const problems: string[] = [];
   const n = splitSentences(brief).length;
   if (n < 2 || n > 3) problems.push(`Brief must be 2-3 sentences, got ${n}`);
@@ -139,7 +139,31 @@ export function validateBrief(brief: string): string[] {
       "No predictions or likelihood words (likely, unlikely, probably...): state facts and the measurable gap to the threshold, and let the forecaster judge",
     );
   }
+  const future = futureClaims(brief, now);
+  if (future.length) {
+    problems.push(
+      `Do not say what has or has not happened on or after ${future[0]}: that date is in the future. Say the window is still open instead`,
+    );
+  }
   return problems;
+}
+
+/**
+ * Sentences that describe a future date in the past tense ("no release has been
+ * published after 2026-11-28" written on the 26th). Returns the future dates found.
+ */
+export function futureClaims(brief: string, now = new Date()): string[] {
+  const today = now.toISOString().slice(0, 10);
+  const found: string[] = [];
+  for (const sentence of splitSentences(brief)) {
+    const pastTense = /\b(has|have|had|was|were)\b(?! (?:still|yet) (?:to|open))/i.test(sentence);
+    const forward = /\b(remains? open|still open|has not (?:started|begun|opened)|will|opens|starts|begins)\b/i.test(sentence);
+    if (!pastTense || forward) continue;
+    for (const [date] of sentence.matchAll(/(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)/g)) {
+      if (date > today) found.push(date);
+    }
+  }
+  return found;
 }
 
 export interface BriefSource {

@@ -5,14 +5,14 @@ import type { MarketInfo } from "../markets/types";
  * best answered from GitHub's releases API: exact tags and publish times.
  */
 
-const REPO = /github\.com\/([\w.-]+)\/([\w.-]+)/i;
+const REPO = /(?:api\.github\.com\/repos|(?<!api\.)github\.com)\/([\w.-]+)\/([\w.-]+)/i;
 const QUESTION_REPO = /\b([\w.-]+)\/([\w.-]+)\s+(?:publish|release|tag|ship)/i;
 
 /** owner/repo a market is about, from its data sources or its question. */
 export function marketRepo(market: Pick<MarketInfo, "question" | "dataSources">): string | null {
   for (const source of market.dataSources ?? []) {
     const m = source.match(REPO);
-    if (m && m[1] !== "api") return `${m[1]}/${m[2].replace(/\.git$/, "")}`;
+    if (m) return `${m[1]}/${m[2].replace(/\.git$/, "")}`;
   }
   const q = market.question.match(QUESTION_REPO);
   return q ? `${q[1]}/${q[2]}` : null;

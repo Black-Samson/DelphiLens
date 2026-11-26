@@ -247,4 +247,17 @@ describe("markets with official data sources", () => {
     expect(out.links).toEqual([wiki.dataSources[0]]);
     expect(out.note).toMatch(/live data read \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC/);
   });
+
+  it("lists a market data source only once, even when spelled with paging params", async () => {
+    const { deps } = setup();
+    deps.search = { search: async () => [] };
+    const bun = {
+      ...sampleMarkets(NOW)[4],
+      question: "Will oven-sh/bun publish a GitHub release tagged bun-v1.4.6 or later between Nov 28 and Dec 11, 2026 (UTC)?",
+      dataSources: ["https://api.github.com/repos/oven-sh/bun/releases"],
+      resolutionCriteria: null,
+    };
+    const found = await findCandidates(bun, deps);
+    expect(found.filter((r) => r.url.includes("api.github.com"))).toHaveLength(1);
+  });
 });

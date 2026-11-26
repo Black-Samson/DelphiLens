@@ -4,6 +4,7 @@ import type { LLMProvider } from "../src/research/llm";
 import {
   BriefError,
   findQuote,
+  futureClaims,
   LLMOutputError,
   parseJsonObject,
   validateBrief,
@@ -94,6 +95,16 @@ describe("verifier", () => {
     ["The count read 7,269,362 at 00:52 UTC. That is 6,138 short, about 424 per day for 14.5 days.", true],
   ])("validates brief %s", (brief, ok) => {
     expect(validateBrief(brief).length === 0).toBe(ok);
+  });
+
+  it("rejects past-tense claims about future dates", () => {
+    const now = new Date("2026-11-26T09:30:00Z");
+    const bad = "The latest release is bun-v1.4.5 from 2026-11-19. No release has been published after 2026-11-28T00:00:00Z.";
+    expect(futureClaims(bad, now)).toEqual(["2026-11-28"]);
+    expect(validateBrief(bad, now).join()).toMatch(/2026-11-28: that date is in the future/);
+    const ok = "The latest release is bun-v1.4.5, published 2026-11-19. The window from 2026-11-28 to 2026-12-11 remains open.";
+    expect(futureClaims(ok, now)).toEqual([]);
+    expect(validateBrief(ok, now)).toEqual([]);
   });
 
   it("retries the brief once with feedback, then gives up", async () => {
