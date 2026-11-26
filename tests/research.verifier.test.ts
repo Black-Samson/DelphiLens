@@ -115,6 +115,9 @@ describe("verifier", () => {
     expect(validateBrief(bad, now).join()).toMatch(/2026-11-28: that date is in the future/);
     const ok = "The latest release is bun-v1.4.5, published 2026-11-19. The window from 2026-11-28 to 2026-12-11 remains open.";
     expect(futureClaims(ok, now)).toEqual([]);
+    const sneaky = "The article records no formal invocation of Article 49.3 on the PLFSS during the period after 28 Nov 2026 (2026-11-28).";
+    expect(futureClaims(sneaky, now)).toEqual(["2026-11-28"]);
+    expect(futureClaims("The CMP is scheduled for 2026-11-28.", now)).toEqual([]);
     expect(validateBrief(ok, now)).toEqual([]);
   });
 

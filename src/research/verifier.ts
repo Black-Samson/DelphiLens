@@ -185,7 +185,10 @@ export function futureClaims(brief: string, now = new Date()): string[] {
   const today = now.toISOString().slice(0, 10);
   const found: string[] = [];
   for (const sentence of splitSentences(brief)) {
-    const pastTense = /\b(has|have|had|was|were)\b(?! (?:still|yet) (?:to|open))/i.test(sentence);
+    const pastTense =
+      /\b(has|have|had|was|were|records?|recorded|reports?|reported|shows?|showed|occurred|happened)\b(?! (?:still|yet) (?:to|open))/i.test(
+        sentence,
+      ) && /\b(no|not|never|none|without|occurred|happened|been)\b/i.test(sentence);
     const forward = /\b(remains? open|still open|has not (?:started|begun|opened)|will|opens|starts|begins)\b/i.test(sentence);
     if (!pastTense || forward) continue;
     for (const [date] of sentence.matchAll(/(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)/g)) {
