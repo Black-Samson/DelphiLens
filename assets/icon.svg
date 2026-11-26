@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>DelphiLens</title>
+  <rect width="512" height="512" rx="104" fill="#0A1211"/>
+  <!-- handle -->
+  <line x1="330" y1="330" x2="414" y2="414" stroke="#C9AE86" stroke-width="40" stroke-linecap="round"/>
+  <!-- lens ring -->
+  <circle cx="232" cy="232" r="138" fill="#101C1A" stroke="#D4A85A" stroke-width="26"/>
+  <circle cx="232" cy="232" r="104" fill="none" stroke="#1E2D2A" stroke-width="4"/>
+  <!-- delta (Delphi) inside the lens -->
+  <path d="M232 150 L304 284 L160 284 Z" fill="none" stroke="#EFE4CC" stroke-width="20" stroke-linejoin="round"/>
+  <!-- the found fact: a spark at the apex -->
+  <circle cx="232" cy="150" r="17" fill="#D9532B"/>
+  <!-- lens glint -->
+  <path d="M150 196 A92 92 0 0 1 196 146" fill="none" stroke="#EFE4CC" stroke-opacity="0.35" stroke-width="10" stroke-linecap="round"/>
+</svg>
