@@ -47,7 +47,7 @@ describe("candidate search", () => {
     await mineMarket(db, market, deps);
     expect(lines[0]).toBe("Planning searches...");
     expect(lines.some((l) => /^Searching 1\/\d+: /.test(l))).toBe(true);
-    expect(lines.some((l) => /^Checking source 1\/\d+: https:/.test(l))).toBe(true);
+    expect(lines.some((l) => /^Source 1\/\d+ \(0\/14 read so far\): https:/.test(l))).toBe(true);
     expect(lines.at(-1)).toMatch(/^Writing the note from \d source/);
   });
 
@@ -70,6 +70,34 @@ describe("candidate search", () => {
     expect(out.status).toBe("no_evidence");
     expect(out.log.filter((l) => l.startsWith("AI check failed (Could not reach the AI service: the request timed out)"))).toHaveLength(3);
     expect(out.log.join("\n")).toMatch(/Stopped: the AI failed 3 times in a row/);
+  });
+
+  it("keeps going past refused pages until enough pages were actually read", async () => {
+    const { db, deps } = setup();
+    let read = 0;
+    deps.search = {
+      search: async (q) =>
+        Array.from({ length: 8 }, (_, i) => ({
+          title: "t",
+          url: `https://site${i}.example.org/${encodeURIComponent(q)}`,
+          snippet: "",
+          published: new Date(NOW.getTime() - 86_400_000).toISOString(),
+        })),
+    };
+    deps.fetcher = {
+      lastFailure: null,
+      async fetch(url) {
+        if (/site[0-4]\./.test(url)) {
+          this.lastFailure = "HTTP 403 (blocked or needs a login)";
+          return null;
+        }
+        read++;
+        this.lastFailure = null;
+        return { text: "The committee met.", published: null };
+      },
+    };
+    await mineMarket(db, market, deps);
+    expect(read).toBeGreaterThan(5);
   });
 
   it("stops trying a site after it refuses a page", async () => {

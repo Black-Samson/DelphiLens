@@ -29,8 +29,10 @@ export const STANCE_MARGIN = 1.5;
 /** After this many AI failures in a row, stop checking sources for this run. */
 export const MAX_AI_FAILURES_IN_A_ROW = 3;
 
-/** Candidate sources checked per market before deciding. */
+/** Pages actually read per market before deciding (refused or skipped pages don't count). */
 export const MAX_EXAMINED = 14;
+/** Candidate links lined up per market, so refused sites don't leave the run short. */
+export const MAX_CANDIDATES = 30;
 
 export interface StanceDecision {
   stance: Stance | null;
@@ -190,16 +192,19 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
   const passing: { result: SearchResult; text: string; verification: Verification; live: boolean }[] = [];
 
   const searchStats: SearchStats = { queries: 0, failed: 0, firstError: null, results: 0, paywalled: 0, tooOld: 0, kept: 0 };
-  const candidates = await findCandidates(market, deps, 10, searchStats);
+  const candidates = await findCandidates(market, deps, MAX_CANDIDATES, searchStats);
   outcome.log.push(describeSearch(searchStats, marketOpenedAt(market.resolutionCriteria, now)));
   deps.onProgress?.(describeSearch(searchStats, marketOpenedAt(market.resolutionCriteria, now)));
   let checked = 0;
   let aiFailures = 0;
   const lessons = recentLessons(db);
   const blockedHosts = new Set<string>();
-  for (const candidate of candidates.slice(0, MAX_EXAMINED)) {
-    checked++;
-    deps.onProgress?.(`Checking source ${checked}/${Math.min(candidates.length, MAX_EXAMINED)}: ${candidate.url}`);
+  let tried = 0;
+  for (const candidate of candidates) {
+    // Only pages actually read count towards the limit; skipped or refused ones don't use it up.
+    if (checked >= MAX_EXAMINED) break;
+    tried++;
+    deps.onProgress?.(`Source ${tried}/${candidates.length} (${checked}/${MAX_EXAMINED} read so far): ${candidate.url}`);
     if (findDuplicates(db, [candidate.url], "").length) {
       outcome.log.push(`Already used: ${candidate.url}`);
       continue;
@@ -224,6 +229,7 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
       outcome.log.push(`Not publicly readable${why ? ` (${why})` : ""}: ${candidate.url}`);
       continue;
     }
+    checked++;
     // Live data (a JSON API) is dated by when it was read: that is when the fact was observed.
     const result = { ...candidate, published: candidate.published ?? page.published ?? page.retrievedAt ?? null };
     const checkTime = page.retrievedAt ? new Date(Math.max(Date.parse(page.retrievedAt), now.getTime())) : now;
