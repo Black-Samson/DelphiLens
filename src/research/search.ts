@@ -89,6 +89,7 @@ export class TavilySearchProvider implements SearchProvider {
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.apiKey}` },
+        signal: AbortSignal.timeout(45_000),
         body: JSON.stringify(body),
       },
       this.fetchFn,

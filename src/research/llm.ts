@@ -45,6 +45,7 @@ export class OpenAICompatibleLLM implements LLMProvider {
     return fetchFrom("the AI service (LLM_BASE_URL)", `${this.baseUrl}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.apiKey}` },
+      signal: AbortSignal.timeout(90_000),
       body: JSON.stringify({
         model: this.model,
         temperature: 0,

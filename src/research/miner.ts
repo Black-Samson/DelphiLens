@@ -59,6 +59,8 @@ export interface MinerDeps {
   maxAgeDays: number;
   now?: () => Date;
   onIssue?: (kind: string, detail: string, context?: Record<string, unknown>) => void;
+  /** Live progress lines (the CLI prints them as mining runs). */
+  onProgress?: (line: string) => void;
 }
 
 export interface MiningOutcome {
@@ -95,8 +97,11 @@ export async function findCandidates(
   const merged: SearchResult[] = [];
   const st: SearchStats = stats ?? { queries: 0, failed: 0, firstError: null, results: 0, paywalled: 0, tooOld: 0, kept: 0 };
   const opened = marketOpenedAt(market.resolutionCriteria);
-  for (const { query, domains } of await fullSearchPlan(deps.llm, market, deps.onIssue)) {
+  deps.onProgress?.("Planning searches...");
+  const plan = await fullSearchPlan(deps.llm, market, deps.onIssue);
+  for (const { query, domains } of plan) {
     st.queries++;
+    deps.onProgress?.(`Searching ${st.queries}/${plan.length}: ${query}${domains ? ` (on ${domains.join(", ")})` : ""}`);
     let results: SearchResult[];
     try {
       results = await deps.search.search(query, undefined, domains ? { domains } : undefined);
@@ -166,7 +171,11 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
   const searchStats: SearchStats = { queries: 0, failed: 0, firstError: null, results: 0, paywalled: 0, tooOld: 0, kept: 0 };
   const candidates = await findCandidates(market, deps, 10, searchStats);
   outcome.log.push(describeSearch(searchStats, marketOpenedAt(market.resolutionCriteria)));
+  deps.onProgress?.(describeSearch(searchStats, marketOpenedAt(market.resolutionCriteria)));
+  let checked = 0;
   for (const candidate of candidates.slice(0, MAX_EXAMINED)) {
+    checked++;
+    deps.onProgress?.(`Checking source ${checked}/${Math.min(candidates.length, MAX_EXAMINED)}: ${candidate.url}`);
     if (findDuplicates(db, [candidate.url], "").length) {
       outcome.log.push(`Already used: ${candidate.url}`);
       continue;
@@ -225,6 +234,7 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
     .slice(0, MAX_SOURCES_PER_SUBMISSION);
   if (!accepted.length || !stance) return outcome;
 
+  deps.onProgress?.(`Writing the note from ${accepted.length} source(s)...`);
   let brief: string;
   try {
     brief = await writeBrief(

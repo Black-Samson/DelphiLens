@@ -88,7 +88,9 @@ async function main(argv: string[]): Promise<void> {
         }
         const market = args[0] ? getMarket(app.db, args[0]) : listMarkets(app.db)[0];
         if (!market) throw new Error(`Unknown market ${args[0]}`);
-        const out = await mineMarket(app.db, market, minerDeps(app));
+        console.log(`Mining: ${market.question}\n(this takes 1 to 5 minutes)\n`);
+        const out = await mineMarket(app.db, market, { ...minerDeps(app), onProgress: (l) => console.log(`  ... ${l}`) });
+        console.log("");
         console.log(`${out.status}${out.stance ? ` (${out.stance})` : ""}: ${market.question}`);
         if (out.note) console.log(`\n${out.note}\n\n${out.links.join("\n")}`);
         for (const line of out.log) console.log(`  - ${line}`);

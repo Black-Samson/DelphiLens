@@ -40,6 +40,17 @@ describe("candidate search", () => {
     expect(found[0].url).toMatch(/\.gov\//);
   });
 
+  it("reports progress while it works", async () => {
+    const { db, deps } = setup();
+    const lines: string[] = [];
+    deps.onProgress = (l) => lines.push(l);
+    await mineMarket(db, market, deps);
+    expect(lines[0]).toBe("Planning searches...");
+    expect(lines.some((l) => /^Searching 1\/\d+: /.test(l))).toBe(true);
+    expect(lines.some((l) => /^Checking source 1\/\d+: https:/.test(l))).toBe(true);
+    expect(lines.at(-1)).toMatch(/^Writing the note from \d source/);
+  });
+
   it("reports a search summary in the mining log", async () => {
     const { db, deps } = setup();
     deps.search = { search: async () => Promise.reject(new Error("Could not reach Tavily search: connection timed out")) };
