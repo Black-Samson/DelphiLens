@@ -50,6 +50,8 @@ async function readJson(req: http.IncomingMessage): Promise<Record<string, unkno
 /** All dashboard API routes. The app is rebuilt after a settings change. */
 export function createHandler(makeApp: () => App) {
   let app = makeApp();
+  /** Markets with a mining run in progress: a second run would race the first for the same sources. */
+  const mining = new Set<string>();
   const routes: [string, RegExp, (m: RegExpMatchArray, req: http.IncomingMessage) => Promise<unknown>][] = [
     ["GET", /^\/api\/state$/, async () => ({
       modes: app.modes,
@@ -96,11 +98,19 @@ export function createHandler(makeApp: () => App) {
     ["POST", /^\/api\/markets\/([^/]+)\/mine$/, async (m) => {
       const market = getMarket(app.db, decodeURIComponent(m[1]));
       if (!market) throw new HttpError(404, "Unknown market");
+      if (mining.has(market.marketId)) {
+        throw new HttpError(409, "This market is already being mined. Wait for that run to finish.");
+      }
+      mining.add(market.marketId);
+      try {
       // Progress goes to the terminal running the dashboard, so long runs are visible.
       console.log(`\nMining: ${market.question}`);
       const out = await mineMarket(app.db, market, { ...minerDeps(app), onProgress: (l) => console.log(`  ... ${l}`) });
       console.log(`  => ${out.status}${out.stance ? ` (${out.stance})` : ""}`);
       return { ...out, question: market.question };
+      } finally {
+        mining.delete(market.marketId);
+      }
     }],
     ["GET", /^\/api\/submissions$/, async () => submissions(app)],
     ["POST", /^\/api\/submissions\/(\d+)\/approve$/, async (m) => submitDraft(app.db, app.evidence, Number(m[1]), app.report)],

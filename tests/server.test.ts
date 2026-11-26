@@ -14,6 +14,14 @@ beforeAll(async () => {
   const make = () => {
     const app = createApp({ dbPath: path.join(dir, "test.db"), env: {} });
     app.settings = { ...app.settings, reportsDir: path.join(dir, "reports"), snapshotsDir: path.join(dir, "snaps") };
+    // A little latency, like real search, so two requests can overlap.
+    const search = app.search;
+    app.search = {
+      search: async (...args: Parameters<typeof search.search>) => {
+        await new Promise((r) => setTimeout(r, 15));
+        return search.search(...args);
+      },
+    };
     return app;
   };
   const server = startServer(0, make);
@@ -39,6 +47,15 @@ describe("dashboard api", () => {
     expect(approved.data.status).toBe("queued");
     const after = (await api("GET", "/api/markets")).data.find((m: { marketId: string }) => m.marketId === markets[0].marketId);
     expect(after).toMatchObject({ stance: mined.stance, used: 1 });
+  });
+
+  it("refuses a second mining run on a market that is already being mined", async () => {
+    const markets = (await api("GET", "/api/markets")).data;
+    const id = markets[3].marketId;
+    const [a, b] = await Promise.all([api("POST", `/api/markets/${id}/mine`), api("POST", `/api/markets/${id}/mine`)]);
+    const statuses = [a.status, b.status].sort();
+    expect(statuses).toEqual([200, 409]);
+    expect([a, b].find((r) => r.status === 409)?.data.error).toMatch(/already being mined/);
   });
 
   it("reports state and flips runtime switches", async () => {
