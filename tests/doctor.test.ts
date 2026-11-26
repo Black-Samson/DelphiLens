@@ -15,6 +15,8 @@ const LIVE = {
 function liveApp(env: Record<string, string> = {}) {
   const app = createApp({ dbPath: ":memory:", env: { ...LIVE, ...env } });
   app.evidence = new MockEvidenceApi(0);
+  app.llm = { complete: async () => '{"ok": true}' };
+  app.search = { search: async () => [] };
   // fetchMarkets reads settings.marketsSource; "mock" keeps this test offline.
   app.settings = { ...app.settings, marketsSource: "mock" };
   return app;
@@ -43,6 +45,14 @@ describe("doctor", () => {
     const checks = await runDoctor(app);
     expect(checks.at(-1)?.detail).toMatch(message);
     expect(checks.at(-1)?.ok).toBe(false);
+  });
+
+  it("tests the AI and explains a wrong model name", async () => {
+    const app = liveApp({ LLM_MODEL: "gpt-4o-mini" });
+    app.llm = { complete: async () => Promise.reject(new Error("LLM returned HTTP 404: model not found")) };
+    const ai = (await runDoctor(app)).find((c) => c.name === "AI");
+    expect(ai?.ok).toBe(false);
+    expect(ai?.detail).toMatch(/Check LLM_MODEL \(now "gpt-4o-mini"\)/);
   });
 
   it("flags unaccepted terms and a missing wallet", async () => {

@@ -28,6 +28,31 @@ export async function runDoctor(app: App): Promise<Check[]> {
   });
   if (s.mockMode) return checks;
 
+  if (app.modes.llm !== "mock") {
+    try {
+      const reply = await app.llm.complete("Reply with one JSON object and nothing else.", 'Reply with {"ok": true}');
+      checks.push({ name: "AI", ok: /ok/i.test(reply), detail: `${s.llmModel} answered` });
+    } catch (err) {
+      const msg = (err as Error).message;
+      const hint = /HTTP 404|not found|model/i.test(msg)
+        ? ` Check LLM_MODEL (now "${s.llmModel}") is a model your provider offers.`
+        : /HTTP 401|HTTP 403|API key|permission/i.test(msg)
+          ? " Check LLM_API_KEY."
+          : /HTTP 429/i.test(msg)
+            ? " Free-tier limit reached; wait a minute."
+            : "";
+      checks.push({ name: "AI", ok: false, detail: `${msg.slice(0, 220)}${hint}` });
+    }
+  }
+  if (app.modes.search !== "mock") {
+    try {
+      const results = await app.search.search("Delphi prediction market", 1);
+      checks.push({ name: "Search", ok: true, detail: `Tavily answered (${results.length} result)` });
+    } catch (err) {
+      checks.push({ name: "Search", ok: false, detail: `${(err as Error).message.slice(0, 220)} Check SEARCH_API_KEY.` });
+    }
+  }
+
   try {
     const { data } = await app.evidence.getLimits();
     checks.push({
