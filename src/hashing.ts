@@ -8,6 +8,8 @@ export function normalizeUrl(raw: string): string {
     url.hash = "";
     for (const key of [...url.searchParams.keys()]) {
       if (/^(utm_|fbclid|gclid|ref$|ref_src)/i.test(key)) url.searchParams.delete(key);
+      // Paging parameters on API lists don't change which source it is.
+      if (url.hostname === "api.github.com" && /^(per_page|page)$/.test(key)) url.searchParams.delete(key);
     }
     url.searchParams.sort();
     const pathname = url.pathname.replace(/\/+$/, "") || "";

@@ -43,11 +43,15 @@ export function summarizeReleases(json: unknown): string | null {
     (r) => `${r.tag_name}${r.prerelease ? " (pre-release)" : ""} published ${r.published_at ?? "unknown"}${r.html_url ? ` ${r.html_url}` : ""}`,
   );
   const dates = releases.map((r) => Date.parse(r.published_at ?? "")).filter(Number.isFinite).sort((a, b) => b - a);
-  let cadence = "";
+  let rhythm = "";
   if (dates.length >= 3) {
     const gaps = dates.slice(0, -1).map((d, i) => (d - dates[i + 1]) / 86_400_000);
     const avg = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-    cadence = `\nAverage gap between the last ${dates.length} releases: ${avg.toFixed(1)} days (shortest ${Math.min(...gaps).toFixed(1)}, longest ${Math.max(...gaps).toFixed(1)}).`;
+    const spanDays = (dates[0] - dates[dates.length - 1]) / 86_400_000;
+    rhythm =
+      `Release rhythm: ${dates.length} releases between ${new Date(dates[dates.length - 1]).toISOString().slice(0, 10)} and ` +
+      `${new Date(dates[0]).toISOString().slice(0, 10)} (${spanDays.toFixed(0)} days). ` +
+      `Average gap ${avg.toFixed(1)} days, shortest ${Math.min(...gaps).toFixed(1)}, longest ${Math.max(...gaps).toFixed(1)}.\n`;
   }
-  return `GitHub releases, newest first:\n${lines.join("\n")}${cadence}`;
+  return `${rhythm}GitHub releases, newest first:\n${lines.join("\n")}`;
 }

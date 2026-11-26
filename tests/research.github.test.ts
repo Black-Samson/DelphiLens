@@ -22,7 +22,7 @@ describe("GitHub release markets", () => {
     expect(text).toContain("bun-v1.4.5 published 2026-11-20T18:00:00Z https://github.com/oven-sh/bun/releases/tag/bun-v1.4.5");
     expect(text).toContain("bun-v1.4.3 (pre-release)");
     expect(text).not.toContain("draft");
-    expect(text).toContain("Average gap between the last 3 releases: 8.0 days (shortest 7.0, longest 9.0).");
+    expect(text?.startsWith("Release rhythm: 3 releases between 2026-11-04 and 2026-11-20 (16 days). Average gap 8.0 days, shortest 7.0, longest 9.0.")).toBe(true);
     expect(summarizeReleases({ not: "a list" })).toBeNull();
   });
 
@@ -54,5 +54,12 @@ describe("GitHub release markets", () => {
     expect(await fetcher.fetch(releasesApiUrl("oven-sh/bun"))).toBeNull();
     expect(fetcher.lastFailure).toMatch(/HTTP 403 \(GitHub's hourly limit.*GITHUB_TOKEN/);
     expect(seen[0].Authorization).toBe("Bearer ghp_test");
+  });
+
+  it("treats the releases list with or without paging as one source", async () => {
+    const { hashUrl } = await import("../src/hashing");
+    expect(hashUrl("https://api.github.com/repos/oven-sh/bun/releases?per_page=15")).toBe(
+      hashUrl("https://api.github.com/repos/oven-sh/bun/releases"),
+    );
   });
 });
