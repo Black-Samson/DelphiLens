@@ -22,7 +22,7 @@ describe("GitHub release markets", () => {
     expect(text).toContain("bun-v1.4.5 published 2026-11-20T18:00:00Z https://github.com/oven-sh/bun/releases/tag/bun-v1.4.5");
     expect(text).toContain("bun-v1.4.3 (pre-release)");
     expect(text).not.toContain("draft");
-    expect(text?.startsWith("Release rhythm: 3 releases between 2026-11-04 and 2026-11-20 (16 days). Average gap 8.0 days, shortest 7.0, longest 9.0.")).toBe(true);
+    expect(text?.startsWith("Release rhythm: 3 releases between 2026-11-04 and 2026-11-20 (16 days). Average gap 8.0 days, median 8.0, shortest 7.0, longest 9.0. 2 of 2 gaps were 14 days or less.")).toBe(true);
     expect(summarizeReleases({ not: "a list" })).toBeNull();
   });
 
