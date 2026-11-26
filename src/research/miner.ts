@@ -25,7 +25,7 @@ import { BriefError, LLMOutputError, verifyEvidence, writeBrief, type Verificati
 /** How much stronger one side's evidence must be before DelphiLens commits to it. */
 export const STANCE_MARGIN = 1.5;
 /** Candidate sources checked per market before deciding. */
-export const MAX_EXAMINED = 8;
+export const MAX_EXAMINED = 14;
 
 export interface StanceDecision {
   stance: Stance | null;

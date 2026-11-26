@@ -153,9 +153,28 @@ describe("choosing a side from all the evidence", () => {
     }
   }
 
+  /** Alternates YES and NO with equal confidence: a perfectly mixed picture. */
+  class AlternatingLLM implements LLMProvider {
+    private n = 0;
+    private mock = new MockLLM();
+    async complete(system: string, prompt: string) {
+      if (!prompt.startsWith("TASK: VERIFY")) return this.mock.complete(system, prompt);
+      return JSON.stringify({
+        publicly_accessible: true,
+        verifiable: true,
+        shifts_probability: true,
+        stance: this.n++ % 2 ? "NO" : "YES",
+        confidence: 0.7,
+        reason: "alternating",
+        fact: `Fact ${this.n}.`,
+        quote: null,
+      });
+    }
+  }
+
   it("does not lock a side when the evidence is mixed", async () => {
     const { db, deps } = setup();
-    deps.llm = new SplitLLM(3);
+    deps.llm = new AlternatingLLM();
     const out = await mineMarket(db, market, deps);
     expect(out.status).toBe("no_evidence");
     expect(out.log.join()).toMatch(/mixed/);

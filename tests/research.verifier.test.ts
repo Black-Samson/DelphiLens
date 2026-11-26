@@ -72,6 +72,7 @@ describe("verifier", () => {
     await verifyEvidence(llm, withCriteria, result, "x");
     expect(llm.prompts[0]).toContain("MARKET_OPENED: 2026-11-24T09:17:34.007Z");
     expect(llm.prompts[0]).toContain("RESOLUTION_CRITERIA: Yes wins if the rate");
+    expect(llm.prompts[0]).toContain("partial progress counts");
   });
 
   it("cleans messy LLM output", async () => {
