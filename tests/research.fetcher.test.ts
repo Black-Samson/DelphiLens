@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractPage, LiveFetcher, robotsAllows } from "../src/research/fetcher";
+import { extractPage, extractPdf, LiveFetcher, parsePdfDate, robotsAllows } from "../src/research/fetcher";
 
 const HTML = `<html><head><meta property="article:published_time" content="2026-11-20T08:00:00Z">
 <style>p{}</style><script>alert(1)</script></head><body><nav>Menu</nav>
@@ -52,5 +52,42 @@ describe("live fetcher", () => {
     expect(await fetcher.fetch("https://b.gov/missing")).toBeNull();
     expect(await fetcher.fetch("https://b.gov/file.pdf")).toBeNull();
     expect(await fetcher.fetch("not a url")).toBeNull();
+  });
+});
+
+const PDF = `%PDF-1.4
+1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
+2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
+3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 100]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj
+4 0 obj<</Length 51>>stream
+BT /F1 12 Tf 20 50 Td (Inflation fell to 2.6 percent) Tj ET
+endstream endobj
+5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj
+6 0 obj<</CreationDate(D:20261126093000+01'00')>>endobj
+trailer<</Root 1 0 R/Info 6 0 R>>
+%%EOF`;
+const pdfBytes = () => new Uint8Array(Buffer.from(PDF, "latin1"));
+
+describe("PDF reading", () => {
+  it("extracts text and the creation date", async () => {
+    const page = await extractPdf(pdfBytes());
+    expect(page?.text).toContain("Inflation fell to 2.6 percent");
+    expect(page?.published).toBe("2026-11-26T08:30:00.000Z");
+  });
+
+  it("parses PDF dates and rejects junk", async () => {
+    expect(parsePdfDate("D:20261120")).toBe("2026-11-20T00:00:00.000Z");
+    expect(parsePdfDate("D:20261120093000Z")).toBe("2026-11-20T09:30:00.000Z");
+    expect(parsePdfDate("nope")).toBeNull();
+    expect(await extractPdf(new Uint8Array([1, 2, 3]))).toBeNull();
+  });
+
+  it("is used by the live fetcher for PDF links", async () => {
+    const fetchFn = (async (url: string) =>
+      url.endsWith("robots.txt")
+        ? new Response("", { status: 404 })
+        : new Response(pdfBytes(), { headers: { "content-type": "application/pdf" } })) as unknown as typeof fetch;
+    const page = await new LiveFetcher(fetchFn).fetch("https://stats.example.gov/release.pdf");
+    expect(page?.text).toContain("2.6 percent");
   });
 });

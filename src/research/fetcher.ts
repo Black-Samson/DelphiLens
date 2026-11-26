@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { getDocumentProxy } from "unpdf";
 
 export const USER_AGENT = "DelphiLens/0.1 (evidence research agent; public sources only)";
 
@@ -50,6 +51,39 @@ export function extractPage(html: string): FetchedPage {
   return { text, published };
 }
 
+export const MAX_PDF_BYTES = 10 * 1024 * 1024;
+export const MAX_PDF_PAGES = 20;
+
+/** PDF dates look like "D:20261120093000+01'00'". */
+export function parsePdfDate(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const m = value.match(/D:(\d{4})(\d{2})(\d{2})(\d{2})?(\d{2})?(\d{2})?(Z|[+-]\d{2}'?\d{2}'?)?/);
+  if (!m) return null;
+  const [, y, mo, d, h = "00", mi = "00", sec = "00", tz = "Z"] = m;
+  const zone = tz === "Z" ? "Z" : tz.replace(/'/g, "").replace(/^([+-]\d{2})(\d{2})$/, "$1:$2");
+  const date = new Date(`${y}-${mo}-${d}T${h}:${mi}:${sec}${zone}`);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+/** Text and date of a PDF (official releases, statistics, central bank papers). The judge reads PDFs too. */
+export async function extractPdf(bytes: Uint8Array): Promise<FetchedPage | null> {
+  if (bytes.byteLength > MAX_PDF_BYTES) return null;
+  try {
+    const doc = await getDocumentProxy(bytes, { verbosity: 0 });
+    const pages = Math.min(doc.numPages, MAX_PDF_PAGES);
+    const parts: string[] = [];
+    for (let i = 1; i <= pages; i++) {
+      const content = await (await doc.getPage(i)).getTextContent();
+      parts.push(content.items.map((item) => ("str" in item ? item.str : "")).join(" "));
+    }
+    const meta = (await doc.getMetadata().catch(() => null))?.info as Record<string, unknown> | undefined;
+    const text = parts.join("\n").replace(/[ \t]+/g, " ").trim();
+    return text ? { text, published: parsePdfDate(meta?.ModDate) ?? parsePdfDate(meta?.CreationDate) } : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Minimal robots.txt check for the "User-agent: *" group. */
 export function robotsAllows(robots: string, path: string): boolean {
   let applies = false;
@@ -79,7 +113,7 @@ export class LiveFetcher implements PageFetcher {
   private async get(url: string): Promise<Response | null> {
     try {
       return await this.fetchFn(url, {
-        headers: { "User-Agent": USER_AGENT, Accept: "text/html,text/plain;q=0.9" },
+        headers: { "User-Agent": USER_AGENT, Accept: "text/html,application/pdf,text/plain;q=0.9" },
         redirect: "follow",
         signal: AbortSignal.timeout(this.timeoutMs),
       });
@@ -108,6 +142,9 @@ export class LiveFetcher implements PageFetcher {
     if (!res || res.status !== 200) return null;
     const type = res.headers.get("content-type")?.toLowerCase() ?? "";
     if (type.includes("html")) return extractPage(await res.text());
+    if (type.includes("pdf") || url.pathname.toLowerCase().endsWith(".pdf")) {
+      return extractPdf(new Uint8Array(await res.arrayBuffer()));
+    }
     if (type.startsWith("text/")) return { text: (await res.text()).trim(), published: null };
     return null;
   }
