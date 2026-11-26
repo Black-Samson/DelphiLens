@@ -1,6 +1,11 @@
 import "dotenv/config";
+import dns from "node:dns";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+// WSL and some home networks advertise IPv6 but cannot route it, so connections
+// hang until they time out. Trying IPv4 addresses first avoids that.
+dns.setDefaultResultOrder("ipv4first");
 
 /** The agent identity is locked: it is sent as X-Agent-Id on every Delphi request. */
 export const AGENT_ID = "DelphiLens";
