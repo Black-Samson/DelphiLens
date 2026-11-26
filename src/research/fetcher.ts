@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import { getDocumentProxy } from "unpdf";
 import { PUBLIC_API_HOSTS, summarizeReleases } from "./github";
+import { describeNetworkError } from "../net";
 
 export const USER_AGENT = "DelphiLens/0.1 (evidence research agent; public sources only)";
 
@@ -29,6 +30,8 @@ export interface FetchOptions {
 export interface PageFetcher {
   /** Clean page text, or null when it can't be read publicly. */
   fetch(url: string, options?: FetchOptions): Promise<FetchedPage | null>;
+  /** Why the last fetch returned null, when known (e.g. "HTTP 403 (rate limited)"). */
+  lastFailure?: string | null;
 }
 
 const DATE_META = [
@@ -122,19 +125,25 @@ export function robotsAllows(robots: string, path: string): boolean {
 export class LiveFetcher implements PageFetcher {
   private robots = new Map<string, string>();
 
+  lastFailure: string | null = null;
+
   constructor(
     private readonly fetchFn: typeof fetch = fetch,
     private readonly timeoutMs = 15_000,
+    /** Optional GitHub token: raises GitHub's API limit from 60 to 5,000 requests an hour. */
+    private readonly githubToken = "",
   ) {}
 
   private async get(url: string): Promise<Response | null> {
+    const headers: Record<string, string> = {
+      "User-Agent": USER_AGENT,
+      Accept: "text/html,application/pdf,application/json,text/plain;q=0.9",
+    };
+    if (this.githubToken && url.startsWith("https://api.github.com/")) headers.Authorization = `Bearer ${this.githubToken}`;
     try {
-      return await this.fetchFn(url, {
-        headers: { "User-Agent": USER_AGENT, Accept: "text/html,application/pdf,text/plain;q=0.9" },
-        redirect: "follow",
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
-    } catch {
+      return await this.fetchFn(url, { headers, redirect: "follow", signal: AbortSignal.timeout(this.timeoutMs) });
+    } catch (err) {
+      this.lastFailure = describeNetworkError(err);
       return null;
     }
   }
@@ -154,10 +163,26 @@ export class LiveFetcher implements PageFetcher {
     } catch {
       return null;
     }
+    this.lastFailure = null;
     const publicApi = PUBLIC_API_HOSTS.includes(url.hostname);
-    if (!options.listedByMarket && !publicApi && !(await this.allowed(url))) return null;
+    if (!options.listedByMarket && !publicApi && !(await this.allowed(url))) {
+      this.lastFailure = "the site's robots.txt asks automated readers to stay out";
+      return null;
+    }
     const res = await this.get(url.toString());
-    if (!res || res.status !== 200) return null;
+    if (!res) return null;
+    if (res.status !== 200) {
+      const limited =
+        res.status === 429 || (res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0")
+          ? url.hostname === "api.github.com"
+            ? " (GitHub's hourly limit for anonymous use; set GITHUB_TOKEN in .env to raise it)"
+            : " (rate limited)"
+          : res.status === 401 || res.status === 403
+            ? " (blocked or needs a login)"
+            : "";
+      this.lastFailure = `HTTP ${res.status}${limited}`;
+      return null;
+    }
     const type = res.headers.get("content-type")?.toLowerCase() ?? "";
     if (type.includes("html")) return extractPage(await res.text());
     if (type.includes("pdf") || url.pathname.toLowerCase().endsWith(".pdf")) {
@@ -175,6 +200,7 @@ export class LiveFetcher implements PageFetcher {
       return { text: text.slice(0, MAX_JSON_CHARS), published: null, retrievedAt: new Date().toISOString() };
     }
     if (type.startsWith("text/")) return { text: (await res.text()).trim(), published: null };
+    this.lastFailure = `unsupported content type ${type || "unknown"}`;
     return null;
   }
 }

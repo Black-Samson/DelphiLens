@@ -33,6 +33,7 @@ export interface Settings {
   marketsSource: MarketsSource;
   marketsUrl: string;
   searchApiKey: string;
+  githubToken: string;
   llmBaseUrl: string;
   llmApiKey: string;
   llmModel: string;
@@ -89,6 +90,7 @@ export function loadSettings(env: Env = process.env): Settings {
     marketsSource: mockMode ? "mock" : source,
     marketsUrl: env.MARKETS_URL?.trim() || COMPETITION_MARKETS_URL,
     searchApiKey: env.SEARCH_API_KEY ?? "",
+    githubToken: (env.GITHUB_TOKEN ?? "").trim(),
     llmBaseUrl: (env.LLM_BASE_URL?.trim() || "https://api.openai.com/v1").replace(/\/+$/, ""),
     llmApiKey: env.LLM_API_KEY ?? "",
     llmModel: env.LLM_MODEL?.trim() || "gpt-4o-mini",

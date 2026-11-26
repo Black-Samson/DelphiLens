@@ -43,4 +43,16 @@ describe("GitHub release markets", () => {
       "2026-11-20T18:00:00.000Z",
     );
   });
+
+  it("says why GitHub refused and sends a token when one is set", async () => {
+    const seen: Record<string, string>[] = [];
+    const limited = (async (_url: string, init: RequestInit) => {
+      seen.push(init.headers as Record<string, string>);
+      return new Response("{}", { status: 403, headers: { "x-ratelimit-remaining": "0" } });
+    }) as unknown as typeof fetch;
+    const fetcher = new LiveFetcher(limited, 15_000, "ghp_test");
+    expect(await fetcher.fetch(releasesApiUrl("oven-sh/bun"))).toBeNull();
+    expect(fetcher.lastFailure).toMatch(/HTTP 403 \(GitHub's hourly limit.*GITHUB_TOKEN/);
+    expect(seen[0].Authorization).toBe("Bearer ghp_test");
+  });
 });

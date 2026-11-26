@@ -97,7 +97,7 @@ export async function findCandidates(
   const seen = new Set<string>();
   const merged: SearchResult[] = [];
   const st: SearchStats = stats ?? { queries: 0, failed: 0, firstError: null, results: 0, paywalled: 0, tooOld: 0, kept: 0 };
-  const opened = marketOpenedAt(market.resolutionCriteria);
+  const opened = marketOpenedAt(market.resolutionCriteria, now);
   deps.onProgress?.("Planning searches...");
   const plan = await fullSearchPlan(deps.llm, market, deps.onIssue);
   for (const { query, domains } of plan) {
@@ -181,8 +181,8 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
 
   const searchStats: SearchStats = { queries: 0, failed: 0, firstError: null, results: 0, paywalled: 0, tooOld: 0, kept: 0 };
   const candidates = await findCandidates(market, deps, 10, searchStats);
-  outcome.log.push(describeSearch(searchStats, marketOpenedAt(market.resolutionCriteria)));
-  deps.onProgress?.(describeSearch(searchStats, marketOpenedAt(market.resolutionCriteria)));
+  outcome.log.push(describeSearch(searchStats, marketOpenedAt(market.resolutionCriteria, now)));
+  deps.onProgress?.(describeSearch(searchStats, marketOpenedAt(market.resolutionCriteria, now)));
   let checked = 0;
   for (const candidate of candidates.slice(0, MAX_EXAMINED)) {
     checked++;
@@ -194,13 +194,14 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
     const listed = (market.dataSources ?? []).includes(candidate.url) || candidate.url.startsWith("https://api.github.com/");
     const page = await deps.fetcher.fetch(candidate.url, listed ? { listedByMarket: true } : undefined);
     if (!page?.text) {
-      outcome.log.push(`Not publicly readable: ${candidate.url}`);
+      const why = deps.fetcher.lastFailure;
+      outcome.log.push(`Not publicly readable${why ? ` (${why})` : ""}: ${candidate.url}`);
       continue;
     }
     // Live data (a JSON API) is dated by when it was read: that is when the fact was observed.
     const result = { ...candidate, published: candidate.published ?? page.published ?? page.retrievedAt ?? null };
     const checkTime = page.retrievedAt ? new Date(Math.max(Date.parse(page.retrievedAt), now.getTime())) : now;
-    if (!isFresh(result.published, market.evidenceCutoff, deps.maxAgeDays, checkTime, marketOpenedAt(market.resolutionCriteria))) {
+    if (!isFresh(result.published, market.evidenceCutoff, deps.maxAgeDays, checkTime, marketOpenedAt(market.resolutionCriteria, now))) {
       outcome.log.push(`Not new since the market opened (or undated): ${candidate.url}`);
       continue;
     }

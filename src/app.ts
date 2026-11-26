@@ -64,7 +64,7 @@ export function createApp(options: { dbPath?: string; env?: Record<string, strin
   const llm = settings.llmApiKey
     ? new OpenAICompatibleLLM(settings.llmBaseUrl, settings.llmApiKey, settings.llmModel)
     : new MockLLM();
-  const fetcher = search instanceof MockSearchProvider ? new MockFetcher() : new LiveFetcher();
+  const fetcher = search instanceof MockSearchProvider ? new MockFetcher() : new LiveFetcher(fetch, 15_000, settings.githubToken);
 
   return {
     settings,

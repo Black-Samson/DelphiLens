@@ -104,6 +104,8 @@ describe("market data sources", () => {
       "2026-11-24T09:17:34.007Z",
     );
     expect(marketOpenedAt("No timestamp here")).toBeNull();
+    // A future "strictly after" is a counting window start, not the opening time.
+    expect(marketOpenedAt("released strictly after 2026-11-28T00:00:00.000Z", new Date("2026-11-26T08:00:00Z"))).toBeNull();
     expect(marketOpenedAt(null)).toBeNull();
   });
 

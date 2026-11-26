@@ -45,9 +45,13 @@ export function parseDate(value: string | null | undefined): Date | null {
  * The resolution criteria count results "published strictly after <time>"; that
  * time is when the market was set up. Facts public before it are presumed priced.
  */
-export function marketOpenedAt(resolutionCriteria: string | null | undefined): string | null {
+export function marketOpenedAt(resolutionCriteria: string | null | undefined, now = new Date()): string | null {
   const match = resolutionCriteria?.match(/strictly after (\d{4}-\d{2}-\d{2}T[\d:.]+Z)/);
-  return match ? (parseDate(match[1])?.toISOString() ?? null) : null;
+  const date = match ? parseDate(match[1]) : null;
+  // A time still in the future is the start of a counting window ("between Nov 28 and..."),
+  // not when the market opened, so it says nothing about which facts are already priced.
+  if (!date || date > now) return null;
+  return date.toISOString();
 }
 
 /**
