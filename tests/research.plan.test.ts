@@ -22,6 +22,7 @@ describe("LLM search planning", () => {
     const queries = await llmQueries(llm, vox);
     expect(queries).toEqual(["encuesta CIS escaños Vox noviembre 2026", "Vox escaños sondeo", "b c", "d e"]);
     expect(llm.prompts[0]).toContain("country's language");
+    expect(llm.prompts[0]).toContain("poll blackouts");
     expect(llm.prompts[0]).toContain("infoelectoral.interior.gob.es");
   });
 

@@ -24,6 +24,12 @@ export async function llmQueries(llm: LLMProvider, market: MarketInfo): Promise<
     `Write up to ${MAX_LLM_QUERIES} short web search queries that would find NEW facts that move this market:`,
     "scheduled releases, official notices, previews, early or partial results, local reporting.",
     "If the market is about a non-English-speaking country, write at least two queries in that country's language.",
+    "Think about where NEW facts appear before mainstream English coverage, for example:",
+    "- elections: last-minute local reporting, campaign events, and where poll blackouts apply, polls published",
+    "  from abroad during the blackout (for Spain, Andorran media) and how local media refer to them;",
+    "- statistics: regional or early releases, private trackers, and economists' previews in the local press;",
+    "- releases and standards: release candidates, mailing lists, changelogs and issue trackers;",
+    "- niche topics: the specialist community's own sites and forums.",
     'Reply with JSON: {"queries": ["...", "..."]}',
   ].join("\n");
   const raw = parseJsonObject(await llm.complete(SYSTEM, prompt)).queries;

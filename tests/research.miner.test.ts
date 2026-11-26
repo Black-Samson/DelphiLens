@@ -72,6 +72,26 @@ describe("candidate search", () => {
     expect(out.log.join("\n")).toMatch(/Stopped: the AI failed 3 times in a row/);
   });
 
+  it("stops trying a site after it refuses a page", async () => {
+    const { db, deps } = setup();
+    let calls = 0;
+    deps.fetcher = {
+      lastFailure: null,
+      async fetch(url) {
+        if (url.includes("agency.example.gov")) {
+          calls++;
+          this.lastFailure = "HTTP 403 (blocked or needs a login)";
+          return null;
+        }
+        this.lastFailure = null;
+        return new MockFetcher().fetch(url);
+      },
+    };
+    const out = await mineMarket(db, market, deps);
+    expect(calls).toBe(1);
+    expect(out.log.join("\n")).toMatch(/Skipped \(agency\.example\.gov refused earlier in this run\)/);
+  });
+
   it("logs a failing search provider and carries on", async () => {
     const { deps } = setup();
     const issues: string[] = [];

@@ -196,6 +196,7 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
   let checked = 0;
   let aiFailures = 0;
   const lessons = recentLessons(db);
+  const blockedHosts = new Set<string>();
   for (const candidate of candidates.slice(0, MAX_EXAMINED)) {
     checked++;
     deps.onProgress?.(`Checking source ${checked}/${Math.min(candidates.length, MAX_EXAMINED)}: ${candidate.url}`);
@@ -203,10 +204,23 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
       outcome.log.push(`Already used: ${candidate.url}`);
       continue;
     }
+    const host = (() => {
+      try {
+        return new URL(candidate.url).hostname;
+      } catch {
+        return candidate.url;
+      }
+    })();
+    if (blockedHosts.has(host)) {
+      outcome.log.push(`Skipped (${host} refused earlier in this run): ${candidate.url}`);
+      continue;
+    }
     const listed = (market.dataSources ?? []).includes(candidate.url) || candidate.url.startsWith("https://api.github.com/");
     const page = await deps.fetcher.fetch(candidate.url, listed ? { listedByMarket: true } : undefined);
     if (!page?.text) {
       const why = deps.fetcher.lastFailure;
+      // A site that refuses one page (blocked, login, region) refuses the rest: don't spend checks on it.
+      if (why && /HTTP (401|403|451)/.test(why)) blockedHosts.add(host);
       outcome.log.push(`Not publicly readable${why ? ` (${why})` : ""}: ${candidate.url}`);
       continue;
     }
