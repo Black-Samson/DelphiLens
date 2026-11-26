@@ -233,3 +233,27 @@ export function prioritizeMarkets<T extends RankableMarket>(db: DB, markets: T[]
   });
   return scored.map((item) => item.market);
 }
+
+export const MAX_NOTE_CHARS = 8000;
+
+/** Replace a draft's note (before it is sent). Keeps the claim hash in step for the duplicate blocker. */
+export function updateDraftNote(db: DB, id: number, note: string): void {
+  const row = getRow(db, id);
+  if (row.status !== "draft") throw new Error("Only drafts that were not sent can be edited");
+  const text = note.trim();
+  if (!text) throw new GuardrailError(["Evidence note cannot be empty"]);
+  if (text.length > MAX_NOTE_CHARS) throw new GuardrailError([`Delphi caps notes at ${MAX_NOTE_CHARS} characters`]);
+  const clash = db
+    .prepare("SELECT submission_id FROM claim_hashes WHERE hash = ? AND kind = 'claim' AND submission_id != ?")
+    .get(hashText(text), id) as { submission_id: number } | undefined;
+  if (clash) throw new GuardrailError([`Duplicate claim: same note as submission #${clash.submission_id}`]);
+  db.transaction(() => {
+    db.prepare("UPDATE submissions SET note = ? WHERE id = ?").run(text, id);
+    db.prepare("DELETE FROM claim_hashes WHERE submission_id = ? AND kind = 'claim'").run(id);
+    db.prepare("INSERT OR IGNORE INTO claim_hashes (hash, kind, market_id, submission_id) VALUES (?, 'claim', ?, ?)").run(
+      hashText(text),
+      row.market_id,
+      id,
+    );
+  })();
+}

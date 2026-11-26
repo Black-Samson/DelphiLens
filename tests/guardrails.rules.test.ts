@@ -7,6 +7,7 @@ import {
   discardDraft,
   getLockedStance,
   markSubmitted,
+  updateDraftNote,
 } from "../src/guardrails";
 import { testDb } from "./helpers";
 
@@ -98,5 +99,21 @@ describe("guardrails", () => {
     const id = createDraft(db, draft(1));
     markSubmitted(db, id, "remote-1");
     expect(() => discardDraft(db, id)).toThrow(/not sent/);
+  });
+
+  it("lets you edit a draft's note, but not a sent one or into a duplicate", () => {
+    const db = testDb();
+    const a = createDraft(db, draft(1));
+    const b = createDraft(db, draft(2));
+    updateDraftNote(db, a, "Corrected note that matches the source.");
+    expect((db.prepare("SELECT note FROM submissions WHERE id = ?").get(a) as { note: string }).note).toBe(
+      "Corrected note that matches the source.",
+    );
+    expect(() => updateDraftNote(db, b, "corrected note that matches the source.")).toThrow(/Duplicate claim/);
+    expect(() => updateDraftNote(db, b, "  ")).toThrow(/cannot be empty/);
+    // The old wording is free again.
+    expect(checkSubmission(db, { ...draft(9), note: "Unique dated claim number 1." }).join()).not.toMatch(/Duplicate claim/);
+    markSubmitted(db, b, "remote");
+    expect(() => updateDraftNote(db, b, "New text.")).toThrow(/not sent/);
   });
 });

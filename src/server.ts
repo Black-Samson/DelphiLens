@@ -7,7 +7,7 @@ import { ROOT } from "./config";
 import { setRuntimeFlag } from "./db";
 import { deliverDigest } from "./delivery";
 import { exportFeedbackReport, listFeedback, logFeedback, sendFeedback } from "./feedback";
-import { countSubmissions, discardDraft, getLockedStance } from "./guardrails";
+import { countSubmissions, discardDraft, getLockedStance, updateDraftNote } from "./guardrails";
 import { fetchMarkets } from "./markets/source";
 import { getMarket, listMarkets, syncMarkets } from "./markets/store";
 import { buildDigest, latestDigest, renderHtml, renderMarkdown, saveDigest } from "./newsletter";
@@ -114,6 +114,11 @@ export function createHandler(makeApp: () => App) {
     }],
     ["GET", /^\/api\/submissions$/, async () => submissions(app)],
     ["POST", /^\/api\/submissions\/(\d+)\/approve$/, async (m) => submitDraft(app.db, app.evidence, Number(m[1]), app.report)],
+    ["POST", /^\/api\/submissions\/(\d+)\/note$/, async (m, req) => {
+      const body = await readJson(req);
+      updateDraftNote(app.db, Number(m[1]), String(body.note ?? ""));
+      return { ok: true };
+    }],
     ["POST", /^\/api\/submissions\/(\d+)\/discard$/, async (m) => {
       discardDraft(app.db, Number(m[1]));
       return { ok: true };

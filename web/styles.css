@@ -122,3 +122,5 @@ td { padding: 12px 8px; border-bottom: 1px solid var(--border); vertical-align: 
 .chart text { fill: var(--muted); font: 12px var(--body); }
 
 .theme-btn { padding: 6px 10px; min-width: 64px; }
+
+.note-edit { margin-top: 12px; font: 13px/1.55 var(--body); resize: vertical; }

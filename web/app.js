@@ -198,11 +198,14 @@ function submissionCard(s, withActions) {
     <div class="label">#${s.id} · ${esc(s.question || s.market_id)}</div>
     <p style="margin:10px 0 0"><span class="pill ${esc(s.stance)}">${esc(s.stance)}</span>
       ${withActions ? "" : `<span class="pill ${esc(verdict)}">${esc(verdict)}</span> <span class="muted">${usd(s.usdc)} USDC.e${s.bounty_state ? ` · ${esc(s.bounty_state)}` : ""}${s.zero_pay_reason ? ` · ${esc(s.zero_pay_reason)}` : ""}</span>`}</p>
-    <p>${esc(s.note)}</p>
+    ${withActions
+      ? `<textarea class="note-edit" data-note="${s.id}" rows="${Math.min(14, 4 + Math.ceil(s.note.length / 110))}">${esc(s.note)}</textarea>
+         <p class="muted" style="font-size:12px;margin:6px 0 0">You can edit the note before approving. Every claim must match the sources.</p>`
+      : `<p style="white-space:pre-wrap">${esc(s.note)}</p>`}
     <ul class="links">${links}</ul>
     ${files ? `<p class="muted" style="font-size:12px">Snapshots: ${files}</p>` : ""}
     ${s.reason ? `<div class="panel" style="margin-top:12px"><div class="label">Judge rationale</div><p style="margin:8px 0 0">${esc(s.reason)}</p></div>` : ""}
-    ${withActions ? `<div class="actions"><button data-approve="${s.id}">Approve &amp; submit</button><button class="danger" data-discard="${s.id}">Reject draft</button></div>` : ""}
+    ${withActions ? `<div class="actions"><button class="ghost" data-save="${s.id}">Save note</button><button data-approve="${s.id}">Approve &amp; submit</button><button class="danger" data-discard="${s.id}">Reject draft</button></div>` : ""}
   </div>`;
 }
 
@@ -217,10 +220,19 @@ async function loadReview() {
 $("drafts").addEventListener("click", (e) => {
   const approve = e.target.closest("button[data-approve]");
   const discard = e.target.closest("button[data-discard]");
-  const button = approve || discard;
+  const save = e.target.closest("button[data-save]");
+  const button = approve || discard || save;
   if (!button) return;
+  const saveNote = async (id) => {
+    const box = document.querySelector(`textarea[data-note="${id}"]`);
+    if (box && box.value !== box.defaultValue) await api("POST", `/api/submissions/${id}/note`, { note: box.value });
+  };
   busy(button, async () => {
-    if (approve) {
+    if (save) {
+      await saveNote(save.dataset.save);
+      toast("Note saved.");
+    } else if (approve) {
+      await saveNote(approve.dataset.approve); // never submit an unsaved edit by surprise: save it first
       const r = await api("POST", `/api/submissions/${approve.dataset.approve}/approve`);
       toast(`Submitted to Delphi (${r.status}). The verdict usually arrives within minutes.`);
     } else {
