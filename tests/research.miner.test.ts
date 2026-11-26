@@ -59,6 +59,19 @@ describe("candidate search", () => {
     expect(out.log[0]).toMatch(/^Search: \d+ searches, \d+ failed \(Could not reach Tavily search: connection timed out\), 0 distinct results, 0 kept to check$/);
   });
 
+  it("skips sources when the AI times out, and stops after 3 failures in a row", async () => {
+    const { db, deps } = setup();
+    const mock = new MockLLM();
+    deps.llm = {
+      complete: async (system, prompt) =>
+        prompt.startsWith("TASK: VERIFY") ? Promise.reject(new Error("Could not reach the AI service: the request timed out")) : mock.complete(system, prompt),
+    };
+    const out = await mineMarket(db, market, deps);
+    expect(out.status).toBe("no_evidence");
+    expect(out.log.filter((l) => l.startsWith("AI check failed (Could not reach the AI service: the request timed out)"))).toHaveLength(3);
+    expect(out.log.join("\n")).toMatch(/Stopped: the AI failed 3 times in a row/);
+  });
+
   it("logs a failing search provider and carries on", async () => {
     const { deps } = setup();
     const issues: string[] = [];

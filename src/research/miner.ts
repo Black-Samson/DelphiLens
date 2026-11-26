@@ -21,10 +21,13 @@ import { saveSnapshots } from "./snapshots";
 import { isFresh, isPaywalled, marketOpenedAt, rankResults } from "./sources";
 import { composeNote } from "./note";
 import { findRepeat, type PriorNote } from "./samefact";
-import { BriefError, LLMOutputError, verifyEvidence, writeBrief, type Verification } from "./verifier";
+import { verifyEvidence, writeBrief, type Verification } from "./verifier";
 
 /** How much stronger one side's evidence must be before DelphiLens commits to it. */
 export const STANCE_MARGIN = 1.5;
+/** After this many AI failures in a row, stop checking sources for this run. */
+export const MAX_AI_FAILURES_IN_A_ROW = 3;
+
 /** Candidate sources checked per market before deciding. */
 export const MAX_EXAMINED = 14;
 
@@ -184,6 +187,7 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
   outcome.log.push(describeSearch(searchStats, marketOpenedAt(market.resolutionCriteria, now)));
   deps.onProgress?.(describeSearch(searchStats, marketOpenedAt(market.resolutionCriteria, now)));
   let checked = 0;
+  let aiFailures = 0;
   for (const candidate of candidates.slice(0, MAX_EXAMINED)) {
     checked++;
     deps.onProgress?.(`Checking source ${checked}/${Math.min(candidates.length, MAX_EXAMINED)}: ${candidate.url}`);
@@ -209,10 +213,15 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
     let verification: Verification;
     try {
       verification = await verifyEvidence(deps.llm, market, result, page.text);
+      aiFailures = 0;
     } catch (err) {
-      if (!(err instanceof LLMOutputError)) throw err;
-      deps.onIssue?.("llm_error", err.message, { url: candidate.url });
-      outcome.log.push(`Verification error: ${candidate.url}`);
+      aiFailures++;
+      deps.onIssue?.("llm_error", (err as Error).message, { url: candidate.url });
+      outcome.log.push(`AI check failed (${(err as Error).message}): ${candidate.url}`);
+      if (aiFailures >= MAX_AI_FAILURES_IN_A_ROW) {
+        outcome.log.push(`Stopped: the AI failed ${aiFailures} times in a row. Try again in a few minutes.`);
+        break;
+      }
       continue;
     }
     if (!verification.passed || !verification.stance) {
@@ -226,8 +235,10 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
         continue;
       }
     } catch (err) {
-      if (!(err instanceof LLMOutputError)) throw err;
-      deps.onIssue?.("llm_error", `Same-fact check failed: ${err.message}`, { url: candidate.url });
+      // Without the same-fact check we can't rule out a repeat, so skip this source.
+      deps.onIssue?.("llm_error", `Same-fact check failed: ${(err as Error).message}`, { url: candidate.url });
+      outcome.log.push(`Same-fact check failed, skipped to be safe (${(err as Error).message}): ${candidate.url}`);
+      continue;
     }
     passing.push({ result, text: page.text, verification, live: Boolean(page.retrievedAt && !candidate.published && !page.published) });
   }
@@ -259,9 +270,8 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
       stance,
     );
   } catch (err) {
-    if (!(err instanceof LLMOutputError || err instanceof BriefError)) throw err;
-    deps.onIssue?.("llm_error", err.message, { market: market.marketId });
-    outcome.log.push(`Could not write a note: ${err.message}`);
+    deps.onIssue?.("llm_error", (err as Error).message, { market: market.marketId });
+    outcome.log.push(`Could not write a note: ${(err as Error).message}`);
     return outcome;
   }
   const note = composeNote(

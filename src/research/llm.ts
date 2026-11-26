@@ -1,4 +1,4 @@
-import { fetchFrom } from "../net";
+import { describeNetworkError, fetchFrom, NetworkError } from "../net";
 import { mockSameFact } from "./samefact";
 
 export interface LLMProvider {
@@ -43,8 +43,14 @@ export class OpenAICompatibleLLM implements LLMProvider {
         res = await this.request(system, prompt);
       }
     }
-    if (!res.ok) throw new Error(`LLM returned HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    let body: { choices?: { message?: { content?: string } }[] };
+    try {
+      if (!res.ok) throw new Error(`LLM returned HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      body = (await res.json()) as typeof body;
+    } catch (err) {
+      if ((err as Error).message.startsWith("LLM returned")) throw err;
+      throw new NetworkError("the AI service (LLM_BASE_URL)", this.baseUrl, describeNetworkError(err));
+    }
     const content = body.choices?.[0]?.message?.content;
     if (!content) throw new Error("LLM reply had no content");
     return content;

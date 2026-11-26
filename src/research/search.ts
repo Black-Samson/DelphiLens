@@ -1,4 +1,4 @@
-import { fetchFrom } from "../net";
+import { describeNetworkError, fetchFrom, NetworkError } from "../net";
 
 export interface SearchResult {
   title: string;
@@ -95,7 +95,12 @@ export class TavilySearchProvider implements SearchProvider {
       this.fetchFn,
     );
     if (!res.ok) throw new Error(`Tavily search returned HTTP ${res.status}`);
-    const json = (await res.json()) as { results?: TavilyResult[] };
+    let json: { results?: TavilyResult[] };
+    try {
+      json = (await res.json()) as typeof json;
+    } catch (err) {
+      throw new NetworkError("Tavily search", "https://api.tavily.com", describeNetworkError(err));
+    }
     return (json.results ?? [])
       .filter((r) => r.url)
       .map((r) => {

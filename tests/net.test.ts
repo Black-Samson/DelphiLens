@@ -25,4 +25,17 @@ describe("network errors", () => {
     expect(describeNetworkError(Object.assign(new Error("x"), { name: "TimeoutError" }))).toBe("the request timed out");
     expect(describeNetworkError(new Error("weird"))).toBe("weird");
   });
+
+  it("names the AI when its answer is cut off mid-way", async () => {
+    const aborted = (async () =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            c.error(Object.assign(new Error("This operation was aborted"), { name: "AbortError" }));
+          },
+        }),
+      )) as unknown as typeof fetch;
+    const err = await new OpenAICompatibleLLM("https://api.groq.com/openai/v1", "k", "m", aborted).complete("s", "p").catch((e) => e);
+    expect(err.message).toBe("Could not reach the AI service (LLM_BASE_URL) at https://api.groq.com/openai/v1: the request timed out");
+  });
 });
