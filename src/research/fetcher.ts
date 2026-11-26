@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { getDocumentProxy } from "unpdf";
+import { PUBLIC_API_HOSTS, summarizeReleases } from "./github";
 
 export const USER_AGENT = "DelphiLens/0.1 (evidence research agent; public sources only)";
 
@@ -54,7 +55,7 @@ export function extractPage(html: string): FetchedPage {
     published = validDate($(selector).attr("content"));
     if (published) break;
   }
-  published ??= validDate($("time[datetime]").first().attr("datetime"));
+  published ??= validDate($("time[datetime], relative-time[datetime], local-time[datetime]").first().attr("datetime"));
 
   $("script, style, noscript, nav, footer, header, aside, form, iframe, svg").remove();
   const root = $("article").first().length ? $("article").first() : $("main").first().length ? $("main").first() : $("body");
@@ -153,7 +154,8 @@ export class LiveFetcher implements PageFetcher {
     } catch {
       return null;
     }
-    if (!options.listedByMarket && !(await this.allowed(url))) return null;
+    const publicApi = PUBLIC_API_HOSTS.includes(url.hostname);
+    if (!options.listedByMarket && !publicApi && !(await this.allowed(url))) return null;
     const res = await this.get(url.toString());
     if (!res || res.status !== 200) return null;
     const type = res.headers.get("content-type")?.toLowerCase() ?? "";
@@ -165,7 +167,8 @@ export class LiveFetcher implements PageFetcher {
       const raw = await res.text();
       let text = raw;
       try {
-        text = JSON.stringify(JSON.parse(raw), null, 1);
+        const json = JSON.parse(raw);
+        text = summarizeReleases(json) ?? JSON.stringify(json, null, 1);
       } catch {
         /* keep the raw body */
       }

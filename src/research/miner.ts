@@ -14,6 +14,7 @@ import type { MarketInfo } from "../markets/types";
 import type { PageFetcher } from "./fetcher";
 import type { LLMProvider } from "./llm";
 import { fullSearchPlan } from "./plan";
+import { marketRepo, releasesApiUrl } from "./github";
 import { dataSourceHosts } from "./queries";
 import type { SearchProvider, SearchResult } from "./search";
 import { saveSnapshots } from "./snapshots";
@@ -130,9 +131,15 @@ export async function findCandidates(
   }
   st.kept = merged.length;
   // The market's listed data sources are where the answer will appear: always check them directly, first.
-  const direct = (market.dataSources ?? [])
-    .filter((url) => !seen.has(normalizeUrl(url)) && !isPaywalled(url))
-    .map((url) => ({ title: "Official data source listed by the market", url, snippet: "", published: null }));
+  const repo = marketRepo(market);
+  const direct = [...(repo ? [releasesApiUrl(repo)] : []), ...(market.dataSources ?? [])]
+    .filter((url, i, all) => all.indexOf(url) === i && !seen.has(normalizeUrl(url)) && !isPaywalled(url))
+    .map((url) => ({
+      title: url.includes("api.github.com") ? `GitHub releases of ${repo}` : "Official data source listed by the market",
+      url,
+      snippet: "",
+      published: null,
+    }));
   return [...direct, ...rankResults(merged, dataSourceHosts(market))].slice(0, limit + direct.length);
 }
 
@@ -184,7 +191,7 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
       outcome.log.push(`Already used: ${candidate.url}`);
       continue;
     }
-    const listed = (market.dataSources ?? []).includes(candidate.url);
+    const listed = (market.dataSources ?? []).includes(candidate.url) || candidate.url.startsWith("https://api.github.com/");
     const page = await deps.fetcher.fetch(candidate.url, listed ? { listedByMarket: true } : undefined);
     if (!page?.text) {
       outcome.log.push(`Not publicly readable: ${candidate.url}`);
