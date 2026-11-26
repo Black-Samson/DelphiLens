@@ -13,7 +13,13 @@ describe("learning from verdicts", () => {
     );
     add.run("Release rhythm summary.\nSources: ...", "duplicate", "We already have this information.", "2026-11-26 09:58:00");
     add.run("A good one.", "accepted", "New and useful.", "2026-11-26 10:00:00");
-    expect(recentLessons(db)).toEqual(['DUPLICATE: "We already have this information." (we sent: Release rhythm summary.)']);
+    db.prepare("UPDATE submissions SET reward_base_units = '2500000' WHERE note = 'A good one.'").run();
+    add.run("Party cautious about schedule.", "accepted", "Reviewed.", "2026-11-26 11:00:00");
+    db.prepare("UPDATE submissions SET zero_pay_reason = 'below_minimum' WHERE note = 'Party cautious about schedule.'").run();
+    expect(recentLessons(db)).toEqual([
+      'ACCEPTED BUT PAID NOTHING (moved the forecast too little: a hint, not a decisive fact): "Reviewed." (we sent: Party cautious about schedule.)',
+      'DUPLICATE: "We already have this information." (we sent: Release rhythm summary.)',
+    ]);
   });
 
   it("passes the lessons to the AI", async () => {

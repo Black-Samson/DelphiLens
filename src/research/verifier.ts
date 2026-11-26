@@ -115,6 +115,9 @@ export async function verifyEvidence(
     "   false only for facts that are new and easy to miss: published in the last day or two, local-language or",
     "   regional reporting, niche communities, a specific detail inside a long document, or early/partial data.",
     "   The judge pays nothing for facts it already has, so when in doubt, true.",
+    "Rewards grow with how much a fact moves the forecast. Hints, cautious statements and commentary move it",
+    "little and earn nothing; decisions, official dates, hard numbers, early or partial results move it a lot.",
+    "Set confidence to reflect how decisive the fact is, not only how sure you are it is true.",
     ...(lessons.length
       ? ["What Delphi's judge said about our earlier submissions that earned nothing (avoid the same mistakes):", ...lessons.map((l) => `- ${l}`)]
       : []),
