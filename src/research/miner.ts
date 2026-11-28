@@ -20,6 +20,7 @@ import { dataSourceHosts } from "./queries";
 import type { SearchProvider, SearchResult } from "./search";
 import { saveSnapshots } from "./snapshots";
 import { liveTrackers } from "./trackers";
+import { saveReading, trendNote } from "./readings";
 import { isFresh, isPaywalled, isUnusableLink, marketOpenedAt, rankResults } from "./sources";
 import { composeNote } from "./note";
 import { findRepeat, type PriorNote } from "./samefact";
@@ -248,9 +249,20 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
       continue;
     }
 
+    // Live data: compare with this URL's earlier reading so the checker can see the pace, then keep this one.
+    let text = page.text;
+    if (page.retrievedAt && !tracked) {
+      const trend = trendNote(db, candidate.url, page.retrievedAt, page.text);
+      if (trend) {
+        text = `${trend}\n\n${page.text}`;
+        deps.onProgress?.(`Pace from earlier reading found for ${candidate.url}`);
+      }
+      saveReading(db, candidate.url, page.retrievedAt, page.text);
+    }
+
     let verification: Verification;
     try {
-      verification = await verifyEvidence(deps.llm, market, result, page.text, lessons);
+      verification = await verifyEvidence(deps.llm, market, result, text, lessons);
       aiFailures = 0;
     } catch (err) {
       aiFailures++;
@@ -278,7 +290,7 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
       outcome.log.push(`Same-fact check failed, skipped to be safe (${(err as Error).message}): ${candidate.url}`);
       continue;
     }
-    passing.push({ result, text: page.text, verification, live: tracked || Boolean(page.retrievedAt && !candidate.published && !page.published) });
+    passing.push({ result, text, verification, live: tracked || Boolean(page.retrievedAt && !candidate.published && !page.published) });
   }
 
   let stance: Stance | null = locked;
