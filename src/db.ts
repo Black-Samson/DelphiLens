@@ -68,6 +68,13 @@ CREATE TABLE IF NOT EXISTS feedback (
   last_seen   TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS live_readings (
+  url      TEXT NOT NULL,
+  read_at  TEXT NOT NULL,
+  body     TEXT NOT NULL,
+  PRIMARY KEY (url, read_at)
+);
+
 CREATE TABLE IF NOT EXISTS runtime_settings (
   key    TEXT PRIMARY KEY,
   value  TEXT NOT NULL

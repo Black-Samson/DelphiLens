@@ -9,7 +9,7 @@ describe("database", () => {
       .all()
       .map((row) => (row as { name: string }).name)
       .sort();
-    expect(tables).toEqual(["claim_hashes", "feedback", "markets", "runtime_settings", "stance_locks", "submissions"]);
+    expect(tables).toEqual(["claim_hashes", "feedback", "live_readings", "markets", "runtime_settings", "stance_locks", "submissions"]);
   });
 
   it("rejects a stance that is not YES or NO", () => {
