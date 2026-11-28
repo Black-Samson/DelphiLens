@@ -19,6 +19,7 @@ import { isGithubNoise, marketRepo, releasesApiUrl } from "./github";
 import { dataSourceHosts } from "./queries";
 import type { SearchProvider, SearchResult } from "./search";
 import { saveSnapshots } from "./snapshots";
+import { liveTrackers } from "./trackers";
 import { isFresh, isPaywalled, isUnusableLink, marketOpenedAt, rankResults } from "./sources";
 import { composeNote } from "./note";
 import { findRepeat, type PriorNote } from "./samefact";
@@ -140,14 +141,17 @@ export async function findCandidates(
   st.kept = merged.length;
   // The market's listed data sources are where the answer will appear: always check them directly, first.
   const repo = marketRepo(market);
-  const direct = [...(repo ? [releasesApiUrl(repo)] : []), ...(market.dataSources ?? [])]
+  const trackers = new Map(liveTrackers(market).map((t) => [t.url, t.title]));
+  const direct = [...(repo ? [releasesApiUrl(repo)] : []), ...(market.dataSources ?? []), ...trackers.keys()]
     .filter((url, i, all) => {
       const key = normalizeUrl(url);
       const first = all.findIndex((u) => normalizeUrl(u) === key) === i;
       return first && !seen.has(key) && !isPaywalled(url);
     })
     .map((url) => ({
-      title: url.includes("api.github.com") ? `GitHub releases of ${repo}` : "Official data source listed by the market",
+      title: url.includes("api.github.com")
+        ? `GitHub releases of ${repo}`
+        : (trackers.get(url) ?? "Official data source listed by the market"),
       url,
       snippet: "",
       published: null,
@@ -231,7 +235,13 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
     }
     checked++;
     // Live data (a JSON API) is dated by when it was read: that is when the fact was observed.
-    const result = { ...candidate, published: candidate.published ?? page.published ?? page.retrievedAt ?? null };
+    // Running-count pages (see trackers.ts) are dated by when they were read, like live data.
+    const tracked = liveTrackers(market).some((t) => t.url === candidate.url);
+    const readAt = page.retrievedAt ?? (tracked ? now.toISOString() : undefined);
+    const result = {
+      ...candidate,
+      published: tracked ? readAt! : (candidate.published ?? page.published ?? page.retrievedAt ?? null),
+    };
     const checkTime = page.retrievedAt ? new Date(Math.max(Date.parse(page.retrievedAt), now.getTime())) : now;
     if (!isFresh(result.published, market.evidenceCutoff, deps.maxAgeDays, checkTime, marketOpenedAt(market.resolutionCriteria, now))) {
       outcome.log.push(`Not new since the market opened (or undated): ${candidate.url}`);
@@ -268,7 +278,7 @@ export async function mineMarket(db: DB, market: MarketInfo, deps: MinerDeps): P
       outcome.log.push(`Same-fact check failed, skipped to be safe (${(err as Error).message}): ${candidate.url}`);
       continue;
     }
-    passing.push({ result, text: page.text, verification, live: Boolean(page.retrievedAt && !candidate.published && !page.published) });
+    passing.push({ result, text: page.text, verification, live: tracked || Boolean(page.retrievedAt && !candidate.published && !page.published) });
   }
 
   let stance: Stance | null = locked;
